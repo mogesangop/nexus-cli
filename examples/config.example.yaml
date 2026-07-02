@@ -1,0 +1,59 @@
+# nexus-cli configuration example.
+#
+# Copy to config.yaml and fill in real values. Generate a fresh template with:
+#   nexus-cli config init --output config.yaml
+#
+# The admin password is NEVER stored here; it is read from the environment
+# variable named by nexus.passwordEnv (export NEXUS_ADMIN_PASSWORD=...).
+
+nexus:
+  baseUrl: "http://nexus.example.com"
+  username: "admin"
+  passwordEnv: "NEXUS_ADMIN_PASSWORD"
+  timeoutSeconds: 30
+  insecureSkipTLSVerify: false
+
+guestAccess:
+  enabled: true
+  roleName: "role_guest_repository_access"
+  anonymousUserId: "anonymous"
+  defaultPolicy: "browseRead"   # browseRead | none
+
+  browseRead:
+    includeRepositories:
+      - "*"
+    excludeRepositories:
+      - "REPLACE_WITH_READ_ONLY_REPO"
+  readOnly:
+    repositories:
+      - "REPLACE_WITH_READ_ONLY_REPO"
+  deny:
+    repositories: []
+  actions:
+    browseRead:
+      - browse
+      - read
+    readOnly:
+      - read
+  forbiddenPrivileges:
+    - "nx-repository-view-*-*-browse"
+    - "nx-repository-view-*-*-*"
+    - "nx-all"
+    - "nx-admin"
+  warnPrivileges:
+    - "nx-search-read"
+
+privilegeNaming:
+  prefix: "priv_guest"
+  separator: "_"
+  replaceDashWithUnderscore: true
+
+audit:
+  enabled: true
+  logPath: "./logs/nexus-cli-audit.log"
+  maskSensitive: true
+
+report:
+  enabled: true
+  outputDir: "./reports"
+  format: "text"   # text | json

@@ -1,0 +1,10 @@
+# build artifact
+/nexus-cli
+
+# local config & runtime output
+/config.yaml
+/logs/
+/reports/
+
+# OS
+.DS_Store
