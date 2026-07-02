@@ -36,6 +36,33 @@ func (c *Client) CreateRepositoryViewPrivilege(name, format, repo string, action
 	return &out, nil
 }
 
+// CreateRepositoryContentSelectorPrivilege creates a privilege of type
+// "repository-content-selector" granting actions on a repository (format, name)
+// scoped to the paths matched by a named content selector.
+// Endpoint: POST /security/privileges.
+//
+// NOTE: The property key "contentSelector" and its value shape (the selector
+// name) must match the target Nexus 3.76 Swagger. Verify before relying on
+// this in production.
+func (c *Client) CreateRepositoryContentSelectorPrivilege(name, format, repo, selector string, actions []string) (*Privilege, error) {
+	body := map[string]any{
+		"name":        name,
+		"description": "managed by nexus-cli",
+		"type":        "repository-content-selector",
+		"properties": map[string]any{
+			"repository":      repo,
+			"format":          format,
+			"contentSelector": selector,
+			"actions":         joinActions(actions),
+		},
+	}
+	var out Privilege
+	if err := c.post("/security/privileges", body, &out); err != nil {
+		return nil, fmt.Errorf("create privilege %s: %w", name, err)
+	}
+	return &out, nil
+}
+
 // GetPrivilege fetches a single privilege by name. Returns an *APIError with
 // Status 404 (see IsNotFound) when it does not exist.
 // Endpoint: GET /security/privileges/{name}.

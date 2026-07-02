@@ -24,6 +24,11 @@ type Record struct {
 	UpdatedRoles       []string `json:"updatedRoles,omitempty"`
 	RemovedPrivileges  []string `json:"removedPrivileges,omitempty"`
 	ErrorMessage       string   `json:"errorMessage,omitempty"`
+	TargetUser         string   `json:"targetUser,omitempty"`
+	TargetPath         string   `json:"targetPath,omitempty"`
+	TargetRepo         string   `json:"targetRepo,omitempty"`
+	CreatedSelectors   []string `json:"createdSelectors,omitempty"`
+	CreatedUsers       []string `json:"createdUsers,omitempty"`
 }
 
 // Logger writes JSONL records to a file. It is safe for sequential use by a
