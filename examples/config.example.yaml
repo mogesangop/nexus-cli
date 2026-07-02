@@ -1,59 +1,173 @@
-# nexus-cli configuration example.
-#
-# Copy to config.yaml and fill in real values. Generate a fresh template with:
+# ============================================================================
+# nexus-cli configuration example  /  nexus-cli 配置示例
+# ============================================================================
+# Copy to config.yaml and fill in real values. A fresh template can also be
+# generated with:
+#   nexus-cli config init --output config.yaml
+# 复制为 config.yaml 并填入真实值。也可用以下命令重新生成模板：
 #   nexus-cli config init --output config.yaml
 #
-# The admin password is NEVER stored here; it is read from the environment
-# variable named by nexus.passwordEnv (export NEXUS_ADMIN_PASSWORD=...).
+# IMPORTANT: the admin password is NEVER stored in this file. It is read at
+# runtime from the environment variable named by `nexus.passwordEnv` below.
+# Export it before running any command that talks to Nexus:
+#   export NEXUS_ADMIN_PASSWORD='your_password'
+# 重要：管理员密码绝不写入本文件，运行时通过下方 `nexus.passwordEnv` 指定的
+# 环境变量读取。执行任何与 Nexus 交互的命令前请先导出：
+#   export NEXUS_ADMIN_PASSWORD='your_password'
+#
+# Field reference follows PRD section 9. Validate your target instance's API
+# against Nexus UI -> Settings -> System -> API (Swagger), since minor Nexus
+# versions can differ.
+# 字段定义遵循 PRD 第 9 节。不同 Nexus 小版本字段可能存在差异，接入前请对照
+# Nexus UI -> Settings -> System -> API (Swagger) 核对目标实例。
+# ============================================================================
 
+# --- Nexus connection & credentials  /  Nexus 连接与凭证 ---------------------
 nexus:
+  # Base URL of the Nexus Repository Manager web UI (no trailing slash).
+  # Nexus 的 Web UI 根地址（不要带末尾斜杠）。
   baseUrl: "http://nexus.example.com"
+  # Admin (or admin-equivalent) account used for all REST calls. Needs
+  # security-management privileges to read/create roles, privileges, users,
+  # and content selectors.
+  # 所有 REST 调用使用的管理员（或同等权限）账号。需要安全管理权限，
+  # 以读取/创建角色、权限、用户和内容选择器。
   username: "admin"
+  # Name of the environment variable that holds the admin password. The
+  # password itself is never written to this file (security invariant #3).
+  # 存放管理员密码的环境变量名。密码本身永不写入配置文件（安全不变式 #3）。
   passwordEnv: "NEXUS_ADMIN_PASSWORD"
+  # HTTP timeout for every REST call, in seconds.
+  # 每个 REST 请求的 HTTP 超时时间（秒）。
   timeoutSeconds: 30
+  # Skip TLS certificate verification. Set to true ONLY for self-signed dev
+  # instances; never enable in production.
+  # 是否跳过 TLS 证书校验。仅在自签证书的开发环境设为 true；
+  # 生产环境切勿开启。
   insecureSkipTLSVerify: false
 
+# --- Guest / anonymous access governance  /  访客 / 匿名访问治理 --------------
+# Controls the `guest sync` / `guest check` commands. The goal: a guest
+# (anonymous user) sees only public repos in the UI, while "protected" repos
+# stay hidden from the UI but remain downloadable via exact URL.
+# 控制 `guest sync` / `guest check` 命令。目标：访客（匿名用户）在 UI 中
+# 只能看到公开仓库；"受保护" 仓库在 UI 中隐藏，但仍可通过精确 URL 下载。
 guestAccess:
+  # Master switch. When false, `guest sync` is a no-op.
+  # 总开关。为 false 时 `guest sync` 不执行任何操作。
   enabled: true
+  # The role whose privileges `guest sync` manages. Must already exist in
+  # Nexus; create it (or reuse the built-in `nx-anonymous` role) and attach
+  # it to the anonymous user before running sync.
+  # `guest sync` 管理的角色名。必须事先在 Nexus 中存在；运行 sync 前请创建
+  # 该角色（或复用内置的 `nx-anonymous` 角色）并绑定到匿名用户。
   roleName: "role_guest_repository_access"
+  # Nexus's anonymous user id. Kept here for reference / future use.
+  # Nexus 的匿名用户 id。此处仅作记录 / 备用。
   anonymousUserId: "anonymous"
-  defaultPolicy: "browseRead"   # browseRead | none
+  # Policy applied to any repo that matches no rule above. Two values:
+  #   browseRead -> grant browse+read (repo visible in UI)
+  #   none       -> grant nothing (repo fully hidden from guest)
+  # 对未命中上述任何规则的仓库应用的策略。取值：
+  #   browseRead -> 授予 browse+read（仓库在 UI 可见）
+  #   none       -> 不授予任何权限（对访客完全隐藏）
+  defaultPolicy: "browseRead"
 
+  # browseRead rule: repos here get browse+read (visible in UI). Uses
+  # include/exclude glob lists. "*" means all repos; exclude then carves
+  # out exceptions. A repo matching BOTH lists is excluded (deny wins).
+  # browseRead 规则：此处仓库授予 browse+read（UI 可见）。使用
+  # include/exclude 通配列表。"*" 表示全部仓库，exclude 用于排除例外；
+  # 同时命中两个列表的仓库会被排除（拒绝优先）。
   browseRead:
     includeRepositories:
       - "*"
     excludeRepositories:
       - "REPLACE_WITH_READ_ONLY_REPO"
+  # readOnly rule: repos listed here get ONLY `read` (no browse). They are
+  # hidden from the UI browse tree but still downloadable via direct URL.
+  # readOnly 规则：此处仓库仅授予 `read`（不含 browse）。在 UI 浏览树中
+  # 隐藏，但仍可通过直链 URL 下载。
   readOnly:
     repositories:
       - "REPLACE_WITH_READ_ONLY_REPO"
+  # deny rule: repos listed here get NO privilege at all — fully invisible
+  # to the guest, even via direct URL.
+  # deny 规则：此处仓库不授予任何权限——对访客完全不可见，
+  # 即使通过直链 URL 也无法访问。
   deny:
     repositories: []
+
+  # The Nexus actions each policy grants. browseRead needs both `browse`
+  # and `read`; readOnly needs only `read`. Keep these as-is unless you
+  # understand the security implications.
+  # 每个策略授予的 Nexus actions。browseRead 需要 `browse` 与 `read`；
+  # readOnly 仅需 `read`。除非清楚安全影响，否则请保持默认值。
   actions:
     browseRead:
       - browse
       - read
     readOnly:
       - read
+
+  # Privileges that are ALWAYS removed from the guest role during `sync`,
+  # regardless of whether they are managed by nexus-cli. These are
+  # dangerous broad privileges the guest should never hold. Wildcards
+  # follow Nexus privilege-id globbing.
+  # 在 `sync` 时无论是否由 nexus-cli 托管，都会从访客角色移除的权限。
+  # 这些是访客绝不应持有的高危宽泛权限。通配符遵循 Nexus 权限 id 匹配规则。
   forbiddenPrivileges:
     - "nx-repository-view-*-*-browse"
     - "nx-repository-view-*-*-*"
     - "nx-all"
     - "nx-admin"
+  # Privileges that are NOT removed but are flagged by `guest check` as
+  # risky. Useful for monitoring without enforcing removal.
+  # 不移除、但 `guest check` 会告警的高风险权限。
+  # 适用于只监控、不强制移除的场景。
   warnPrivileges:
     - "nx-search-read"
 
+# --- Generated privilege naming  /  生成权限的命名规则 -----------------------
+# Controls how nexus-cli names the per-repo `repository-view` privileges it
+# creates. Only privileges whose name starts with `privilegeNaming.prefix`
+# are considered "managed" and will be touched by `guest sync`.
+# 控制 nexus-cli 为每个仓库创建的 `repository-view` 权限如何命名。
+# 只有名称以 `privilegeNaming.prefix` 开头的权限才会被视为 "托管" 权限，
+# 会被 `guest sync` 处理。
 privilegeNaming:
+  # Prefix for all managed privilege names. The trailing separator is added
+  # automatically, so `priv_guest` yields names like `priv_guest_raw_*`.
+  # 所有托管权限名的前缀。末尾分隔符会自动追加，
+  # 因此 `priv_guest` 会生成形如 `priv_guest_raw_*` 的名称。
   prefix: "priv_guest"
+  # Separator inserted between prefix, format, repo, and action tokens.
+  # 在前缀、format、仓库名、action 之间插入的分隔符。
   separator: "_"
+  # When true, dashes/dots/slashes in the repo name become underscores so
+  # the privilege name is a valid Nexus id.
+  # 为 true 时，仓库名中的短横线、点、斜杠会被替换为下划线，
+  # 以保证权限名为合法的 Nexus id。
   replaceDashWithUnderscore: true
 
+# --- Audit log  /  审计日志 -------------------------------------------------
+# Every mutating command appends one JSONL record here. Records never
+# contain the password or Authorization header (security invariant #3).
+# 每个写操作命令都会在此追加一条 JSONL 记录。记录中绝不包含密码或
+# Authorization 头（安全不变式 #3）。
 audit:
   enabled: true
   logPath: "./logs/nexus-cli-audit.log"
+  # Mask sensitive fields in log records (operator names, etc.).
+  # 是否对日志记录中的敏感字段脱敏（操作人名等）。
   maskSensitive: true
 
+# --- Execution reports  /  执行报告 -----------------------------------------
+# Where `guest sync --report` / `guest check` write human-readable reports.
+# `guest sync --report` / `guest check` 写入可读报告的位置。
 report:
   enabled: true
   outputDir: "./reports"
-  format: "text"   # text | json
+  # Report file format: "text" (console-style) or "json".
+  # 报告文件格式："text"（控制台风格）或 "json"。
+  format: "text"

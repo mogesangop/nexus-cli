@@ -12,6 +12,13 @@ downloadable via exact URL.
 
 See `doc/nexus-cli第一版本PRD.md` for the full product spec.
 
+A second use case is **per-user path-scoped sharing**: `share grant` creates a
+content selector, a path-scoped `browse+read` privilege, a role, and a user so
+a named person can browse/download artifacts under one directory of one repo —
+without exposing anything else. Share resources use a separate `priv_share_`
+prefix and their own `role_share_*` roles, so they are invisible to the guest
+subsystem and vice versa.
+
 ## Build
 
 ```sh
@@ -46,6 +53,33 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ./nexus-cli guest check --config config.yaml
 ```
 
+### Grant a user path-scoped access to a repo
+
+```sh
+# Dry-run first: prints the selector/privilege/role/user that would be created.
+./nexus-cli share grant \
+  --config config.yaml \
+  --repo devops-prod-generic \
+  --path /team-a/ \
+  --user alice.team-a \
+  --email alice@example.com \
+  --first-name Alice --last-name Team \
+  --dry-run
+
+# Apply. The generated password is printed ONCE to stdout — save it now.
+./nexus-cli share grant \
+  --config config.yaml \
+  --repo devops-prod-generic \
+  --path /team-a/ \
+  --user alice.team-a \
+  --email alice@example.com \
+  --first-name Alice --last-name Team
+```
+
+The grant is idempotent: re-running with the same args reuses the existing
+selector, privilege, and role. An existing user is an **error** — the password
+is never reset. Partial progress is not rolled back, so re-running is safe.
+
 ## Commands
 
 | Command | Description |
@@ -54,7 +88,21 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | `repo list --config config.yaml` | List all repositories (name, format, type). |
 | `guest sync --config config.yaml [--dry-run] [--report FILE]` | Synchronize guest role privileges from config. |
 | `guest check --config config.yaml` | Read-only check that the guest role matches config. |
+| `share grant --config ... --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
 | `health check --config config.yaml` | Connectivity / API / auth health check. |
+
+### `share grant` flags
+
+| Flag | Required | Description |
+| --- | --- | --- |
+| `--repo` | yes | Repository name. |
+| `--path` | yes | Directory path, must start with `/`, e.g. `/team-a/`. |
+| `--user` | yes | User id to create. Must not already exist. |
+| `--email` | yes | User email address. |
+| `--first-name` / `--last-name` | no | User display name parts. |
+| `--format` | no | Repository format; auto-detected from `repo list` if omitted. |
+| `--password-length` | no | Generated password length (default 24). |
+| `--dry-run` | no | Print the plan without creating anything or generating a password. |
 
 ## Configuration
 

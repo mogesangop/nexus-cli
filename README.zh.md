@@ -6,6 +6,8 @@
 
 完整产品规格见 `doc/nexus-cli第一版本PRD.md`。
 
+第二个用例是**按用户路径范围分享**：`share grant` 会创建内容选择器、路径范围的 `browse+read` 权限、角色和用户，让指定用户只能浏览/下载某一个仓库某一个目录下的制品，其它内容对其完全不可见。分享类资源使用独立的 `priv_share_` 前缀和 `role_share_*` 角色，与访客子系统互不可见、互不影响。
+
 ## 构建
 
 ```sh
@@ -40,6 +42,31 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ./nexus-cli guest check --config config.yaml
 ```
 
+### 为用户授予某个仓库目录的访问权限
+
+```sh
+# 先 dry-run：打印将会创建的 selector/privilege/role/user。
+./nexus-cli share grant \
+  --config config.yaml \
+  --repo devops-prod-generic \
+  --path /team-a/ \
+  --user alice.team-a \
+  --email alice@example.com \
+  --first-name Alice --last-name Team \
+  --dry-run
+
+# 正式执行。生成的密码只会打印一次到 stdout，请立即保存。
+./nexus-cli share grant \
+  --config config.yaml \
+  --repo devops-prod-generic \
+  --path /team-a/ \
+  --user alice.team-a \
+  --email alice@example.com \
+  --first-name Alice --last-name Team
+```
+
+该授权是幂等的：使用相同参数重复执行会复用已存在的 selector、privilege 和 role。若用户已存在则**报错**——绝不重置已有用户密码。失败时不回滚已完成的步骤，因此可安全重试。
+
 ## 命令
 
 | 命令 | 说明 |
@@ -48,7 +75,21 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | `repo list --config config.yaml` | 列出所有仓库（name、format、type）。 |
 | `guest sync --config config.yaml [--dry-run] [--report FILE]` | 按配置同步访客角色权限。 |
 | `guest check --config config.yaml` | 只读校验访客角色是否符合配置。 |
+| `share grant --config ... --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
 | `health check --config config.yaml` | 连接 / API / 认证健康检查。 |
+
+### `share grant` 参数
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `--repo` | 是 | 仓库名。 |
+| `--path` | 是 | 目录路径，必须以 `/` 开头，如 `/team-a/`。 |
+| `--user` | 是 | 要创建的用户 id，不能已存在。 |
+| `--email` | 是 | 用户邮箱。 |
+| `--first-name` / `--last-name` | 否 | 用户姓名。 |
+| `--format` | 否 | 仓库 format，省略时通过 `repo list` 自动探测。 |
+| `--password-length` | 否 | 生成密码长度（默认 24）。 |
+| `--dry-run` | 否 | 只打印计划，不创建任何资源，也不生成密码。 |
 
 ## 配置
 
