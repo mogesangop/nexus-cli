@@ -1,5 +1,6 @@
 # build artifact
 /nexus-cli
+/dist/
 
 # local config & runtime output
 /config.yaml

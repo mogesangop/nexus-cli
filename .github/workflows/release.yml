@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CGO_ENABLED: '0'
+  GOPROXY: https://goproxy.cn,direct
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build (${{ matrix.goarch }})
+        run: bash scripts/build.sh "${GITHUB_REF_NAME}"
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/nexus-cli-linux-${{ matrix.goarch }}
+            dist/nexus-cli-linux-${{ matrix.goarch }}.sha256
