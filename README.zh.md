@@ -1,5 +1,8 @@
 # nexus-cli
 
+[![CI](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 一个用于治理 **Nexus Repository 3.76** 访客 / 匿名访问的命令行工具。
 
 第一版本解决一个问题：访客（匿名用户）在 Nexus UI 中能看到过多仓库与制品。Nexus 不支持「给所有仓库授予 browse，但排除某一个」的权限模型，因此 `nexus-cli` 会读取仓库列表，为每个仓库构建 `repository-view` 权限并绑定到访客角色 —— 对公开仓库授予 `browse+read`，对需要隐藏的仓库只授予 `read`（UI 不可见，但仍可通过精确 URL 下载）。
@@ -7,6 +10,8 @@
 完整产品规格见 `doc/nexus-cli第一版本PRD.md`。
 
 第二个用例是**按用户路径范围分享**：`share grant` 会创建内容选择器、路径范围的 `browse+read` 权限、角色和用户，让指定用户只能浏览/下载某一个仓库某一个目录下的制品，其它内容对其完全不可见。分享类资源使用独立的 `priv_share_` 前缀和 `role_share_*` 角色，与访客子系统互不可见、互不影响。
+
+第三个用例是管理 `raw/hosted` 仓库及 Community/OSS 环境下的制品生命周期。CLI 可以幂等创建或安全更新仓库，并按文件最后修改时间与路径规则预览、删除过期制品。完整规格见 `doc/raw仓库与制品生命周期PRD.md`。
 
 ## 构建
 
@@ -73,6 +78,10 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | --- | --- |
 | `config init --output config.yaml` | 生成配置模板。 |
 | `repo list --config config.yaml` | 列出所有仓库（name、format、type）。 |
+| `repo raw apply --config config.yaml [--dry-run]` | 应用配置中声明的 raw hosted 仓库。 |
+| `repo raw ensure --name R --blob-store B [...]` | 创建或安全更新单个 raw hosted 仓库。 |
+| `repo lifecycle preview --repo R [...]` | 只读预览过期 raw 制品。 |
+| `repo lifecycle run --repo R --yes [...]` | 删除过期 raw 制品。 |
 | `guest sync --config config.yaml [--dry-run] [--report FILE]` | 按配置同步访客角色权限。 |
 | `guest check --config config.yaml` | 只读校验访客角色是否符合配置。 |
 | `share grant --config ... --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
@@ -96,6 +105,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 参见 `examples/config.example.yaml`。主要配置段：
 
 - `nexus` —— 连接与凭证。`passwordEnv` 指定存放管理员密码的环境变量名（密码永不写入配置文件）。
+- `repositories.raw` —— raw hosted 仓库目标状态及 CLI 生命周期规则。
 - `guestAccess` —— 目标角色、仓库策略、禁止/警告权限。
 - `privilegeNaming` —— 前缀（`priv_guest`）、分隔符、短横线替换。
 - `audit` —— JSONL 审计日志路径与脱敏开关。
@@ -122,11 +132,22 @@ deny > readOnly > browseRead > defaultPolicy
 
 `guest sync` 是幂等的（PRD §14）：状态未变时第二次执行不会创建也不会移除任何内容。已存在且符合配置的托管权限会被跳过；陈旧的托管权限会被移除。
 
+`repo raw apply` 同样幂等。它不会迁移 blob store，也不会删除重建同名仓库。建议先执行：
+
+```sh
+./nexus-cli repo raw apply --config config.yaml --dry-run
+./nexus-cli repo lifecycle preview --config config.yaml --repo devops-prod-generic
+./nexus-cli repo lifecycle run --config config.yaml --repo devops-prod-generic --yes
+```
+
+生命周期可由 cron 定时调用。`run` 会删除 Nexus component，但磁盘空间仍需 Nexus 的 blob store compact 任务回收。
+
 ## 安全
 
 - 管理员密码从环境变量读取，永不写入配置文件。
 - 审计日志不含密码，也不含 `Authorization` 头。
 - `--dry-run` 只计算并打印计划，不修改 Nexus。
+- 生命周期实际删除必须显式传入 `--yes`；`excludePaths` 始终优先于 `includePaths`。
 
 ## 故障排查
 

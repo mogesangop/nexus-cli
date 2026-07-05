@@ -38,9 +38,9 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-流程:checkout → setup-go(按 go.mod 选版本)→ 跑 build.sh(含 vet+test)→ 把两个二进制及 sha256 上传到该 tag 的 GitHub Release。
+流程:checkout → setup-go(按 go.mod 选版本)→ 跑 build.sh(含 vet+test)→ 把两个二进制及 sha256 上传到该 tag 的 GitHub Release，并自动生成 release notes。
 
-matrix 并行构建 `amd64` 和 `arm64`。arm64 在 x64 runner 上纯 Go 交叉编译,无需 QEMU。
+arm64 在 x64 runner 上通过纯 Go 交叉编译,无需 QEMU。日常 push 和 pull request 由 `.github/workflows/ci.yml` 执行 race test、覆盖率、vet 和 build，覆盖率文件作为 Actions artifact 保存。
 
 发布后到仓库的 **Releases** 页面下载,附件共 4 个(2 二进制 + 2 sha256)。
 

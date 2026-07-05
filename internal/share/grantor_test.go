@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moge/nexus-cli/internal/nexus"
+	"github.com/231397220/nexus-cli/internal/nexus"
 )
 
 func TestGrant_AllCreate(t *testing.T) {
@@ -171,11 +171,11 @@ func TestGrant_PathNormalization(t *testing.T) {
 // --- fake NexusAPI ---
 
 type fakeAPI struct {
-	repos           []nexus.Repository
-	selectors       map[string]*nexus.ContentSelector
-	privileges      map[string]*nexus.Privilege
-	roles           map[string]*nexus.Role
-	users           map[string]*nexus.User
+	repos            []nexus.Repository
+	selectors        map[string]*nexus.ContentSelector
+	privileges       map[string]*nexus.Privilege
+	roles            map[string]*nexus.Role
+	users            map[string]*nexus.User
 	setPasswordCalls map[string]int
 }
 

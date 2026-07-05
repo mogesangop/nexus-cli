@@ -7,19 +7,19 @@ package guest
 import (
 	"sort"
 
-	"github.com/moge/nexus-cli/internal/config"
-	"github.com/moge/nexus-cli/internal/naming"
-	"github.com/moge/nexus-cli/internal/nexus"
+	"github.com/231397220/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/naming"
+	"github.com/231397220/nexus-cli/internal/nexus"
 )
 
 // Policy is the resolved access policy for a single repository.
 type Policy string
 
 const (
-	PolicyDeny      Policy = "deny"
-	PolicyReadOnly  Policy = "readOnly"
+	PolicyDeny       Policy = "deny"
+	PolicyReadOnly   Policy = "readOnly"
 	PolicyBrowseRead Policy = "browseRead"
-	PolicyNone      Policy = "none"
+	PolicyNone       Policy = "none"
 )
 
 // TargetPermission is the desired permission for one repository.
@@ -40,22 +40,22 @@ type TargetPrivilege struct {
 
 // SyncPlan is the computed set of changes between config and Nexus state.
 type SyncPlan struct {
-	TargetRole              string
-	RepositoriesTotal       int
-	BrowseReadRepositories  []string
-	ReadOnlyRepositories    []string
-	DenyRepositories        []string
-	PrivilegesToCreate      []TargetPrivilege
-	PrivilegesToSkip        []string
-	PrivilegesToRemove      []string
-	RemovedRiskyPrivileges  []string
-	Warnings                []string
+	TargetRole             string
+	RepositoriesTotal      int
+	BrowseReadRepositories []string
+	ReadOnlyRepositories   []string
+	DenyRepositories       []string
+	PrivilegesToCreate     []TargetPrivilege
+	PrivilegesToSkip       []string
+	PrivilegesToRemove     []string
+	RemovedRiskyPrivileges []string
+	Warnings               []string
 }
 
 // Planner computes target permissions and a SyncPlan.
 type Planner struct {
-	cfg     *config.Config
-	namer   *naming.Generator
+	cfg   *config.Config
+	namer *naming.Generator
 }
 
 // NewPlanner returns a Planner.

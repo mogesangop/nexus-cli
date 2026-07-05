@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/moge/nexus-cli/internal/config"
-	"github.com/moge/nexus-cli/internal/naming"
-	"github.com/moge/nexus-cli/internal/nexus"
-	"github.com/moge/nexus-cli/internal/report"
+	"github.com/231397220/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/naming"
+	"github.com/231397220/nexus-cli/internal/nexus"
+	"github.com/231397220/nexus-cli/internal/report"
 )
 
 // Checker verifies that the live guest role matches the config (PRD 8.6).

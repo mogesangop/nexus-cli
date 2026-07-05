@@ -1,5 +1,8 @@
 # nexus-cli
 
+[![CI](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A CLI for governing **Nexus Repository 3.76** guest / anonymous access.
 
 The first version solves one problem: a guest (anonymous user) can see too
@@ -18,6 +21,11 @@ a named person can browse/download artifacts under one directory of one repo —
 without exposing anything else. Share resources use a separate `priv_share_`
 prefix and their own `role_share_*` roles, so they are invisible to the guest
 subsystem and vice versa.
+
+A third use case manages `raw/hosted` repositories and artifact retention on
+Nexus Community/OSS. The CLI safely reconciles repository settings and can
+preview or delete old files using last-modified age and path rules. See
+`doc/raw仓库与制品生命周期PRD.md`.
 
 ## Build
 
@@ -86,6 +94,10 @@ is never reset. Partial progress is not rolled back, so re-running is safe.
 | --- | --- |
 | `config init --output config.yaml` | Generate a config template. |
 | `repo list --config config.yaml` | List all repositories (name, format, type). |
+| `repo raw apply --config config.yaml [--dry-run]` | Apply declared raw hosted repositories. |
+| `repo raw ensure --name R --blob-store B [...]` | Create or safely update one raw hosted repository. |
+| `repo lifecycle preview --repo R [...]` | Read-only preview of expired raw components. |
+| `repo lifecycle run --repo R --yes [...]` | Delete expired raw components. |
 | `guest sync --config config.yaml [--dry-run] [--report FILE]` | Synchronize guest role privileges from config. |
 | `guest check --config config.yaml` | Read-only check that the guest role matches config. |
 | `share grant --config ... --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
@@ -110,6 +122,7 @@ See `examples/config.example.yaml`. Key sections:
 
 - `nexus` — connection + credentials. `passwordEnv` names the env var holding
   the admin password (the password is never written to the file).
+- `repositories.raw` — desired raw hosted repositories and CLI retention rules.
 - `guestAccess` — target role, repository policies, forbidden/warn privileges.
 - `privilegeNaming` — prefix (`priv_guest`), separator, dash replacement.
 - `audit` — JSONL audit log path and masking.
@@ -146,11 +159,25 @@ role during `sync`. `warnPrivileges` (e.g. `nx-search-read`) are flagged in
 and removes nothing. Existing managed privileges that match the config are
 skipped; stale managed privileges are removed.
 
+`repo raw apply` is also idempotent and never migrates a blob store or
+delete/recreates a conflicting repository. Preview changes and retention first:
+
+```sh
+./nexus-cli repo raw apply --config config.yaml --dry-run
+./nexus-cli repo lifecycle preview --config config.yaml --repo devops-prod-generic
+./nexus-cli repo lifecycle run --config config.yaml --repo devops-prod-generic --yes
+```
+
+The lifecycle run can be scheduled with cron. Deleting a Nexus component does
+not immediately reclaim disk space; Nexus blob-store compaction is still
+required.
+
 ## Security
 
 - The admin password is read from the environment, never from the config file.
 - Audit logs never contain the password or `Authorization` header.
 - `--dry-run` computes and prints the plan without modifying Nexus.
+- Lifecycle deletion requires explicit `--yes`; excluded paths always win.
 
 ## Troubleshooting
 

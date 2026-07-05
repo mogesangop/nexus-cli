@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,11 +20,11 @@ import (
 
 // Client talks to the Nexus REST API.
 type Client struct {
-	baseURL string // e.g. http://nexus.example.com  (no trailing slash)
-	v1      string // baseURL + "/service/rest/v1"
+	baseURL  string // e.g. http://nexus.example.com  (no trailing slash)
+	v1       string // baseURL + "/service/rest/v1"
 	username string
 	password string
-	http    *http.Client
+	http     *http.Client
 }
 
 // New constructs a Client. timeoutSeconds <=0 falls back to 30s.
@@ -61,8 +62,8 @@ func (e *APIError) Error() string {
 
 // IsNotFound reports whether the error is a 404.
 func IsNotFound(err error) bool {
-	ae, ok := err.(*APIError)
-	return ok && ae.Status == http.StatusNotFound
+	var ae *APIError
+	return errors.As(err, &ae) && ae.Status == http.StatusNotFound
 }
 
 // do performs an authenticated request. The body argument may be nil.
@@ -130,6 +131,11 @@ func (c *Client) post(path string, body, out any) error {
 
 func (c *Client) put(path string, body any) error {
 	_, err := c.do(http.MethodPut, path, body)
+	return err
+}
+
+func (c *Client) delete(path string) error {
+	_, err := c.do(http.MethodDelete, path, nil)
 	return err
 }
 

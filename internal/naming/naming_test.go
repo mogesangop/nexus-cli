@@ -3,7 +3,7 @@ package naming
 import (
 	"testing"
 
-	"github.com/moge/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/config"
 )
 
 func cfg() config.PrivilegeNaming {

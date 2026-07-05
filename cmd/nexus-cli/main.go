@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/moge/nexus-cli/internal/cli"
+	"github.com/231397220/nexus-cli/internal/cli"
 )
 
 func main() {

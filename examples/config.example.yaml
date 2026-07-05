@@ -46,6 +46,32 @@ nexus:
   # 生产环境切勿开启。
   insecureSkipTLSVerify: false
 
+# --- Managed raw hosted repositories / 托管的 raw hosted 仓库 ----------------
+repositories:
+  raw:
+    - name: "devops-prod-generic"
+      online: true
+      storage:
+        # The blob store must already exist; nexus-cli never creates or moves it.
+        # Blob store 必须已存在；nexus-cli 不创建也不迁移 blob store。
+        blobStoreName: "default"
+        strictContentTypeValidation: true
+        # allow | allow_once | deny
+        writePolicy: "allow_once"
+      # attachment | inline
+      contentDisposition: "attachment"
+      # Community/OSS lifecycle is executed by this CLI, not a Nexus cleanup policy.
+      # Community/OSS 生命周期由本 CLI 执行，并非 Nexus cleanup policy。
+      lifecycle:
+        enabled: true
+        retentionDays: 90
+        # Empty includePaths means all paths. Exclude always wins.
+        # includePaths 为空表示全部路径；exclude 始终优先。
+        includePaths:
+          - "^releases/.*"
+        excludePaths:
+          - "^releases/latest/.*"
+
 # --- Guest / anonymous access governance  /  访客 / 匿名访问治理 --------------
 # Controls the `guest sync` / `guest check` commands. The goal: a guest
 # (anonymous user) sees only public repos in the UI, while "protected" repos

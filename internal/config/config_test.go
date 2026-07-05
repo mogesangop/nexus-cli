@@ -71,3 +71,53 @@ func TestLoad_RoundTrip(t *testing.T) {
 		t.Errorf("roleName mismatch")
 	}
 }
+
+func TestValidateRawRepositories(t *testing.T) {
+	valid := RawRepository{
+		Name: "releases", Online: true,
+		Storage:            RawStorage{BlobStoreName: "default", WritePolicy: "allow_once"},
+		ContentDisposition: "attachment",
+		Lifecycle:          LifecycleConfig{Enabled: true, RetentionDays: 30, IncludePaths: []string{"^releases/"}},
+	}
+	t.Run("valid", func(t *testing.T) {
+		c := Default()
+		c.Repositories.Raw = []RawRepository{valid}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+	})
+	t.Run("missing blob store", func(t *testing.T) {
+		c := Default()
+		r := valid
+		r.Storage.BlobStoreName = ""
+		c.Repositories.Raw = []RawRepository{r}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("invalid retention", func(t *testing.T) {
+		c := Default()
+		r := valid
+		r.Lifecycle.RetentionDays = 0
+		c.Repositories.Raw = []RawRepository{r}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("invalid regex", func(t *testing.T) {
+		c := Default()
+		r := valid
+		r.Lifecycle.IncludePaths = []string{"["}
+		c.Repositories.Raw = []RawRepository{r}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("duplicate", func(t *testing.T) {
+		c := Default()
+		c.Repositories.Raw = []RawRepository{valid, valid}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+}

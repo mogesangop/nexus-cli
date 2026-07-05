@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -15,34 +16,63 @@ import (
 
 // Config is the root configuration object.
 type Config struct {
-	Nexus           NexusConfig    `yaml:"nexus"`
-	GuestAccess     GuestAccess    `yaml:"guestAccess"`
-	PrivilegeNaming PrivilegeNaming `yaml:"privilegeNaming"`
-	Audit           AuditConfig    `yaml:"audit"`
-	Report          ReportConfig   `yaml:"report"`
+	Nexus           NexusConfig        `yaml:"nexus"`
+	Repositories    RepositoriesConfig `yaml:"repositories,omitempty"`
+	GuestAccess     GuestAccess        `yaml:"guestAccess"`
+	PrivilegeNaming PrivilegeNaming    `yaml:"privilegeNaming"`
+	Audit           AuditConfig        `yaml:"audit"`
+	Report          ReportConfig       `yaml:"report"`
+}
+
+// RepositoriesConfig contains repositories managed by nexus-cli.
+type RepositoriesConfig struct {
+	Raw []RawRepository `yaml:"raw,omitempty"`
+}
+
+// RawRepository is the desired configuration of a raw hosted repository.
+type RawRepository struct {
+	Name               string          `yaml:"name"`
+	Online             bool            `yaml:"online"`
+	Storage            RawStorage      `yaml:"storage"`
+	ContentDisposition string          `yaml:"contentDisposition"`
+	Lifecycle          LifecycleConfig `yaml:"lifecycle,omitempty"`
+}
+
+type RawStorage struct {
+	BlobStoreName               string `yaml:"blobStoreName"`
+	StrictContentTypeValidation bool   `yaml:"strictContentTypeValidation"`
+	WritePolicy                 string `yaml:"writePolicy"`
+}
+
+// LifecycleConfig defines CLI-managed retention for raw components.
+type LifecycleConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	RetentionDays int      `yaml:"retentionDays"`
+	IncludePaths  []string `yaml:"includePaths,omitempty"`
+	ExcludePaths  []string `yaml:"excludePaths,omitempty"`
 }
 
 // NexusConfig holds connection settings for the target Nexus instance.
 type NexusConfig struct {
-	BaseURL                string `yaml:"baseUrl"`
-	Username               string `yaml:"username"`
-	PasswordEnv            string `yaml:"passwordEnv"`
-	TimeoutSeconds         int    `yaml:"timeoutSeconds"`
-	InsecureSkipTLSVerify  bool   `yaml:"insecureSkipTLSVerify"`
+	BaseURL               string `yaml:"baseUrl"`
+	Username              string `yaml:"username"`
+	PasswordEnv           string `yaml:"passwordEnv"`
+	TimeoutSeconds        int    `yaml:"timeoutSeconds"`
+	InsecureSkipTLSVerify bool   `yaml:"insecureSkipTLSVerify"`
 }
 
 // GuestAccess configures the guest/anonymous role permission sync.
 type GuestAccess struct {
-	Enabled              bool             `yaml:"enabled"`
-	RoleName             string           `yaml:"roleName"`
-	AnonymousUserID      string           `yaml:"anonymousUserId"`
-	DefaultPolicy        string           `yaml:"defaultPolicy"`
-	BrowseRead           BrowseReadRule   `yaml:"browseRead"`
-	ReadOnly             NameList         `yaml:"readOnly"`
-	Deny                 NameList         `yaml:"deny"`
-	Actions              ActionsConfig    `yaml:"actions"`
-	ForbiddenPrivileges  []string         `yaml:"forbiddenPrivileges"`
-	WarnPrivileges       []string         `yaml:"warnPrivileges"`
+	Enabled             bool           `yaml:"enabled"`
+	RoleName            string         `yaml:"roleName"`
+	AnonymousUserID     string         `yaml:"anonymousUserId"`
+	DefaultPolicy       string         `yaml:"defaultPolicy"`
+	BrowseRead          BrowseReadRule `yaml:"browseRead"`
+	ReadOnly            NameList       `yaml:"readOnly"`
+	Deny                NameList       `yaml:"deny"`
+	Actions             ActionsConfig  `yaml:"actions"`
+	ForbiddenPrivileges []string       `yaml:"forbiddenPrivileges"`
+	WarnPrivileges      []string       `yaml:"warnPrivileges"`
 }
 
 // BrowseReadRule selects repositories eligible for browse+read.
@@ -64,8 +94,8 @@ type ActionsConfig struct {
 
 // PrivilegeNaming controls generated privilege name formatting.
 type PrivilegeNaming struct {
-	Prefix               string `yaml:"prefix"`
-	Separator            string `yaml:"separator"`
+	Prefix                string `yaml:"prefix"`
+	Separator             string `yaml:"separator"`
 	ReplaceDashWithUScore bool   `yaml:"replaceDashWithUnderscore"`
 }
 
@@ -89,12 +119,13 @@ type ReportConfig struct {
 func Default() *Config {
 	return &Config{
 		Nexus: NexusConfig{
-			BaseURL:                "http://nexus.example.com",
-			Username:               "admin",
-			PasswordEnv:            "NEXUS_ADMIN_PASSWORD",
-			TimeoutSeconds:         30,
-			InsecureSkipTLSVerify:  false,
+			BaseURL:               "http://nexus.example.com",
+			Username:              "admin",
+			PasswordEnv:           "NEXUS_ADMIN_PASSWORD",
+			TimeoutSeconds:        30,
+			InsecureSkipTLSVerify: false,
 		},
+		Repositories: RepositoriesConfig{Raw: []RawRepository{}},
 		GuestAccess: GuestAccess{
 			Enabled:         true,
 			RoleName:        "role_guest_repository_access",
@@ -169,6 +200,44 @@ func (c *Config) Validate() error {
 	}
 	if c.Nexus.TimeoutSeconds <= 0 {
 		c.Nexus.TimeoutSeconds = 30
+	}
+	seenRepos := make(map[string]struct{}, len(c.Repositories.Raw))
+	for i := range c.Repositories.Raw {
+		r := &c.Repositories.Raw[i]
+		if strings.TrimSpace(r.Name) == "" {
+			return fmt.Errorf("repositories.raw[%d].name is required", i)
+		}
+		if _, exists := seenRepos[r.Name]; exists {
+			return fmt.Errorf("repositories.raw contains duplicate name %q", r.Name)
+		}
+		seenRepos[r.Name] = struct{}{}
+		if strings.TrimSpace(r.Storage.BlobStoreName) == "" {
+			return fmt.Errorf("repositories.raw[%d].storage.blobStoreName is required", i)
+		}
+		if r.Storage.WritePolicy == "" {
+			r.Storage.WritePolicy = "allow_once"
+		}
+		switch r.Storage.WritePolicy {
+		case "allow", "allow_once", "deny":
+		default:
+			return fmt.Errorf("repositories.raw[%d].storage.writePolicy must be allow, allow_once, or deny", i)
+		}
+		if r.ContentDisposition == "" {
+			r.ContentDisposition = "attachment"
+		}
+		switch r.ContentDisposition {
+		case "attachment", "inline":
+		default:
+			return fmt.Errorf("repositories.raw[%d].contentDisposition must be attachment or inline", i)
+		}
+		if r.Lifecycle.Enabled && r.Lifecycle.RetentionDays <= 0 {
+			return fmt.Errorf("repositories.raw[%d].lifecycle.retentionDays must be greater than zero", i)
+		}
+		for _, expression := range append(append([]string{}, r.Lifecycle.IncludePaths...), r.Lifecycle.ExcludePaths...) {
+			if _, err := regexp.Compile(expression); err != nil {
+				return fmt.Errorf("repositories.raw[%d].lifecycle invalid path regex %q: %w", i, expression, err)
+			}
+		}
 	}
 	if c.GuestAccess.RoleName == "" {
 		return fmt.Errorf("guestAccess.roleName is required")

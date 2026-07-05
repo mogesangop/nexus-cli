@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/moge/nexus-cli/internal/nexus"
+	"github.com/231397220/nexus-cli/internal/nexus"
 )
 
 // NexusAPI is the subset of the Nexus client the Grantor needs. *nexus.Client
@@ -49,19 +49,19 @@ type Request struct {
 // Result captures what the Grantor did. Password is returned ONLY so the CLI
 // can print it once; it never enters audit records or logs.
 type Result struct {
-	Repo              string
-	Format            string
-	Path              string
-	Selector          string
-	Privilege         string
-	Role              string
-	User              string
-	SelectorCreated   bool
-	PrivilegeCreated  bool
-	RoleCreated       bool
-	UserCreated       bool
-	PasswordSet       bool
-	Password          string
+	Repo             string
+	Format           string
+	Path             string
+	Selector         string
+	Privilege        string
+	Role             string
+	User             string
+	SelectorCreated  bool
+	PrivilegeCreated bool
+	RoleCreated      bool
+	UserCreated      bool
+	PasswordSet      bool
+	Password         string
 }
 
 const (
@@ -91,9 +91,9 @@ func (g *Grantor) Grant(client NexusAPI, req Request) (*Result, error) {
 	}
 
 	res := &Result{
-		Repo:  req.Repo,
-		Path:  normalizePath(req.Path),
-		User:  req.UserID,
+		Repo: req.Repo,
+		Path: normalizePath(req.Path),
+		User: req.UserID,
 	}
 
 	format := req.Format

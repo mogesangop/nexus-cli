@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/moge/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/config"
 )
 
 // Generator builds privilege names from a PrivilegeNaming config.

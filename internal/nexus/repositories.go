@@ -1,6 +1,9 @@
 package nexus
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+)
 
 // Repository mirrors the subset of Nexus repository fields nexus-cli needs.
 type Repository struct {
@@ -21,4 +24,54 @@ func (c *Client) ListRepositories() ([]Repository, error) {
 		return nil, fmt.Errorf("list repositories: %w", err)
 	}
 	return repos, nil
+}
+
+// RawHostedRepository is the Nexus raw hosted repository request/response.
+type RawHostedRepository struct {
+	Name      string             `json:"name"`
+	Online    bool               `json:"online"`
+	Storage   RepositoryStorage  `json:"storage"`
+	Cleanup   *CleanupSettings   `json:"cleanup,omitempty"`
+	Component *ComponentSettings `json:"component,omitempty"`
+	Raw       RawSettings        `json:"raw"`
+}
+
+type RepositoryStorage struct {
+	BlobStoreName               string `json:"blobStoreName"`
+	StrictContentTypeValidation bool   `json:"strictContentTypeValidation"`
+	WritePolicy                 string `json:"writePolicy"`
+}
+
+type RawSettings struct {
+	ContentDisposition string `json:"contentDisposition"`
+}
+
+type CleanupSettings struct {
+	PolicyNames []string `json:"policyNames"`
+}
+
+type ComponentSettings struct {
+	ProprietaryComponents bool `json:"proprietaryComponents"`
+}
+
+func (c *Client) GetRawHostedRepository(name string) (*RawHostedRepository, error) {
+	var out RawHostedRepository
+	if err := c.get("/repositories/raw/hosted/"+url.PathEscape(name), &out); err != nil {
+		return nil, fmt.Errorf("get raw hosted repository %s: %w", name, err)
+	}
+	return &out, nil
+}
+
+func (c *Client) CreateRawHostedRepository(repo RawHostedRepository) error {
+	if err := c.post("/repositories/raw/hosted", repo, nil); err != nil {
+		return fmt.Errorf("create raw hosted repository %s: %w", repo.Name, err)
+	}
+	return nil
+}
+
+func (c *Client) UpdateRawHostedRepository(repo RawHostedRepository) error {
+	if err := c.put("/repositories/raw/hosted/"+url.PathEscape(repo.Name), repo); err != nil {
+		return fmt.Errorf("update raw hosted repository %s: %w", repo.Name, err)
+	}
+	return nil
 }

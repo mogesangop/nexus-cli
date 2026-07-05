@@ -12,23 +12,31 @@ import (
 
 // Record is a single audit log entry.
 type Record struct {
-	Timestamp          string   `json:"timestamp"`
-	Operator           string   `json:"operator"`
-	Command            string   `json:"command"`
-	NexusBaseURL       string   `json:"nexusBaseUrl"`
-	TargetRole         string   `json:"targetRole,omitempty"`
-	DryRun             bool     `json:"dryRun"`
-	Action             string   `json:"action"`
-	Result             string   `json:"result"`
-	CreatedPrivileges  []string `json:"createdPrivileges,omitempty"`
-	UpdatedRoles       []string `json:"updatedRoles,omitempty"`
-	RemovedPrivileges  []string `json:"removedPrivileges,omitempty"`
-	ErrorMessage       string   `json:"errorMessage,omitempty"`
-	TargetUser         string   `json:"targetUser,omitempty"`
-	TargetPath         string   `json:"targetPath,omitempty"`
-	TargetRepo         string   `json:"targetRepo,omitempty"`
-	CreatedSelectors   []string `json:"createdSelectors,omitempty"`
-	CreatedUsers       []string `json:"createdUsers,omitempty"`
+	Timestamp           string   `json:"timestamp"`
+	Operator            string   `json:"operator"`
+	Command             string   `json:"command"`
+	NexusBaseURL        string   `json:"nexusBaseUrl"`
+	TargetRole          string   `json:"targetRole,omitempty"`
+	DryRun              bool     `json:"dryRun"`
+	Action              string   `json:"action"`
+	Result              string   `json:"result"`
+	CreatedPrivileges   []string `json:"createdPrivileges,omitempty"`
+	UpdatedRoles        []string `json:"updatedRoles,omitempty"`
+	RemovedPrivileges   []string `json:"removedPrivileges,omitempty"`
+	ErrorMessage        string   `json:"errorMessage,omitempty"`
+	TargetUser          string   `json:"targetUser,omitempty"`
+	TargetPath          string   `json:"targetPath,omitempty"`
+	TargetRepo          string   `json:"targetRepo,omitempty"`
+	CreatedSelectors    []string `json:"createdSelectors,omitempty"`
+	CreatedUsers        []string `json:"createdUsers,omitempty"`
+	RepositoryAction    string   `json:"repositoryAction,omitempty"`
+	RetentionDays       int      `json:"retentionDays,omitempty"`
+	IncludePaths        []string `json:"includePaths,omitempty"`
+	ExcludePaths        []string `json:"excludePaths,omitempty"`
+	ScannedComponents   int      `json:"scannedComponents,omitempty"`
+	CandidateComponents int      `json:"candidateComponents,omitempty"`
+	DeletedComponents   int      `json:"deletedComponents,omitempty"`
+	SkippedComponents   int      `json:"skippedComponents,omitempty"`
 }
 
 // Logger writes JSONL records to a file. It is safe for sequential use by a

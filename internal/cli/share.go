@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/moge/nexus-cli/internal/audit"
-	"github.com/moge/nexus-cli/internal/config"
-	"github.com/moge/nexus-cli/internal/share"
+	"github.com/231397220/nexus-cli/internal/audit"
+	"github.com/231397220/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/share"
 	"github.com/spf13/cobra"
 )
 

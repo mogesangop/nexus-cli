@@ -1,4 +1,4 @@
-module github.com/moge/nexus-cli
+module github.com/231397220/nexus-cli
 
 go 1.22
 

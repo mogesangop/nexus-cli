@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/moge/nexus-cli/internal/audit"
-	"github.com/moge/nexus-cli/internal/config"
-	"github.com/moge/nexus-cli/internal/guest"
-	"github.com/moge/nexus-cli/internal/report"
+	"github.com/231397220/nexus-cli/internal/audit"
+	"github.com/231397220/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/guest"
+	"github.com/231397220/nexus-cli/internal/report"
 	"github.com/spf13/cobra"
 )
 

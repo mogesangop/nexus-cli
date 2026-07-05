@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/moge/nexus-cli/internal/config"
-	"github.com/moge/nexus-cli/internal/nexus"
+	"github.com/231397220/nexus-cli/internal/config"
+	"github.com/231397220/nexus-cli/internal/nexus"
 	"github.com/spf13/cobra"
 )
 

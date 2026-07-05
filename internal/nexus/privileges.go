@@ -4,11 +4,11 @@ import "fmt"
 
 // Privilege represents a Nexus security privilege.
 type Privilege struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Type        string            `json:"type"`
 	Properties  map[string]string `json:"properties,omitempty"`
-	ReadOnly    bool   `json:"readOnly,omitempty"`
+	ReadOnly    bool              `json:"readOnly,omitempty"`
 }
 
 // CreateRepositoryViewPrivilege creates a privilege of type
@@ -20,7 +20,7 @@ type Privilege struct {
 // on this in production.
 func (c *Client) CreateRepositoryViewPrivilege(name, format, repo string, actions []string) (*Privilege, error) {
 	body := map[string]any{
-		"name":       name,
+		"name":        name,
 		"description": "managed by nexus-cli",
 		"type":        "repository-view",
 		"properties": map[string]any{
