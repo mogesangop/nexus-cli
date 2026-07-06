@@ -37,28 +37,35 @@ fits your environment.
 ### npm (cross-platform)
 
 ```sh
+# Install globally.
 npm i -g @mogesang/nexus-cli
 nexus-cli --help
+
+# Or run it once without a global install.
+npx @mogesang/nexus-cli --help
 ```
 
 Supported: linux / macOS / Windows on x64 / arm64. The package is a thin
 wrapper whose `postinstall` downloads the matching binary from GitHub
 Releases and verifies its sha256.
 
-### yum / dnf (RHEL, CentOS, Rocky, Alma, Fedora)
+### RPM via yum / dnf (RHEL, CentOS, Rocky, Alma, Fedora)
 
 ```sh
-# 1. Add the repo and import the signing key.
+# Add the repository configuration and import its signing key.
 sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
   https://mogesangop.github.io/nexus-cli/nexus-cli.repo
 sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
 
-# 2. Install.
-sudo yum install nexus-cli   # or: dnf install nexus-cli
+# Install and verify.
+sudo dnf install nexus-cli   # use `yum install nexus-cli` on yum-based systems
+nexus-cli --help
+rpm -q nexus-cli
 ```
 
 The yum repo is a static tree served from this project's GitHub Pages and
-is rebuilt on every release tag. RPMs are GPG-signed.
+is rebuilt on every release tag. It provides x86_64 and aarch64 packages;
+all RPMs are GPG-signed.
 
 ### Direct download
 

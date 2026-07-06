@@ -15,6 +15,47 @@
 
 第三个用例是管理 `raw/hosted` 仓库及 Community/OSS 环境下的制品生命周期。CLI 可以幂等创建或安全更新仓库，并按文件最后修改时间与路径规则预览、删除过期制品。完整规格见 `doc/raw仓库与制品生命周期PRD.md`。
 
+## 安装
+
+每次发布都会提供预编译二进制，可根据运行环境选择 npm 或 RPM 安装。
+
+### npm（跨平台）
+
+```sh
+# 全局安装。
+npm i -g @mogesang/nexus-cli
+nexus-cli --help
+
+# 或者不全局安装，仅运行一次。
+npx @mogesang/nexus-cli --help
+```
+
+支持 Linux、macOS 和 Windows 的 x64 / arm64 平台。npm 包是一个轻量
+包装器：安装时会从 GitHub Releases 下载与当前平台匹配的二进制，并校验
+SHA-256。
+
+### 通过 yum / dnf 安装 RPM（RHEL、CentOS、Rocky、Alma、Fedora）
+
+```sh
+# 添加软件源配置并导入 RPM 签名公钥。
+sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
+  https://mogesangop.github.io/nexus-cli/nexus-cli.repo
+sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
+
+# 安装并验证。
+sudo dnf install nexus-cli   # 使用 yum 的系统请执行：yum install nexus-cli
+nexus-cli --help
+rpm -q nexus-cli
+```
+
+YUM 仓库由本项目的 GitHub Pages 托管，每次发布标签触发后自动重建。
+仓库提供 x86_64 和 aarch64 软件包，所有 RPM 均带有 GPG 签名。
+
+### 直接下载
+
+从 [最新版本](https://github.com/mogesangop/nexus-cli/releases/latest)
+下载对应平台的压缩包，解压后将 `nexus-cli` 放入 `PATH`。
+
 ## 构建
 
 ```sh
