@@ -4,7 +4,6 @@
 #
 # Env (required for signing):
 #   GPG_PRIVATE_KEY  - ASCII-armored private key
-#   GPG_PASSPHRASE   - key passphrase (empty if none)
 #   GPG_KEY_ID       - signing key id
 #
 # Requires: fpm, rpm, rpmsign, createrepo, gpg
@@ -56,36 +55,16 @@ echo "==> import GPG key"
 echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
 gpg --batch --armor --export "${GPG_KEY_ID}" > "${DIST}/RPM-GPG-KEY-nexus-cli"
 
-echo "==> configure gpg for non-interactive signing"
-mkdir -p "${HOME}/.gnupg" && chmod 700 "${HOME}/.gnupg"
-printf 'use-agent\npinentry-mode loopback\nbatch\n' > "${HOME}/.gnupg/gpg.conf"
-printf 'allow-loopback-pinentry\ndefault-cache-ttl 7200\nmax-cache-ttl 7200\n' > "${HOME}/.gnupg/gpg-agent.conf"
-gpgconf --kill gpg-agent 2>/dev/null || true
-
-# Write passphrase to a temp file so we can pass it to gpg via
-# --passphrase-file (avoids command-line exposure and special-char issues).
-# For passphrase-less keys the file is empty and gpg signs without it.
-PASS_FILE="$(mktemp)"
-printf '%s' "${GPG_PASSPHRASE:-}" > "${PASS_FILE}"
-chmod 600 "${PASS_FILE}"
-trap 'rm -f "${PASS_FILE}"' EXIT
-
-GPG_BIN="$(command -v gpg || echo gpg)"
-
-# Override %__gpg_sign_cmd to inject --pinentry-mode loopback and
-# --passphrase-file so gpg never needs a TTY or gpg-agent to unlock the key.
-# %%{__filename} and %%{__signature_filename} use double-% so rpm expands
-# them at sign time (they are runtime-only macros). A single % would be
-# evaluated at macro-file load time when __filename is undefined, leaving a
-# literal '%{__filename}' string that gpg can't open.
+echo "==> configure rpm signing identity"
 cat > "${HOME}/.rpmmacros" <<EOF
 %_signature gpg
 %_gpg_name ${GPG_KEY_ID}
-%__gpg_sign_cmd ${GPG_BIN} --batch --no-verbose --yes --no-tty --pinentry-mode loopback --passphrase-file ${PASS_FILE} -u ${GPG_KEY_ID} -o %%{__signature_filename} --detach-sign %%{__filename}
 EOF
 
 echo "==> sign rpms"
 rpm --addsign "${DIST}"/nexus-cli-*.rpm
+echo "==> import public key into rpm keyring"
+rpm --import "${DIST}/RPM-GPG-KEY-nexus-cli"
 echo "==> verify signatures"
 rpm --checksig "${DIST}"/nexus-cli-*.rpm
 
