@@ -29,6 +29,43 @@ Nexus Community/OSS. The CLI safely reconciles repository settings and can
 preview or delete old files using last-modified age and path rules. See
 `doc/raw仓库与制品生命周期PRD.md`.
 
+## Install
+
+Prebuilt binaries are published with each release. Pick whichever channel
+fits your environment.
+
+### npm (cross-platform)
+
+```sh
+npm i -g @mogesangop/nexus-cli
+nexus-cli --help
+```
+
+Supported: linux / macOS / Windows on x64 / arm64. The package is a thin
+wrapper whose `postinstall` downloads the matching binary from GitHub
+Releases and verifies its sha256.
+
+### yum / dnf (RHEL, CentOS, Rocky, Alma, Fedora)
+
+```sh
+# 1. Add the repo and import the signing key.
+sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
+  https://mogesangop.github.io/nexus-cli/nexus-cli.repo
+sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
+
+# 2. Install.
+sudo yum install nexus-cli   # or: dnf install nexus-cli
+```
+
+The yum repo is a static tree served from this project's GitHub Pages and
+is rebuilt on every release tag. RPMs are GPG-signed.
+
+### Direct download
+
+Grab the archive for your platform from the
+[latest release](https://github.com/mogesangop/nexus-cli/releases/latest),
+extract it, and put `nexus-cli` on your `PATH`.
+
 ## Build
 
 ```sh
@@ -208,3 +245,6 @@ required.
 make test    # unit tests (naming, planner, config) — no network needed
 make vet     # go vet
 ```
+
+> Maintainer release & distribution setup (npm token, GPG key, GitHub Pages)
+> is documented in [`doc/publishing.md`](doc/publishing.md).

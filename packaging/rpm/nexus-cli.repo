@@ -1,0 +1,6 @@
+[nexus-cli]
+name=nexus-cli
+baseurl=https://mogesangop.github.io/nexus-cli/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli

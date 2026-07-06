@@ -1,0 +1,30 @@
+{
+  "name": "@mogesangop/nexus-cli",
+  "version": "1.0.0",
+  "description": "CLI for governing Nexus Repository 3.76 guest/anonymous access",
+  "license": "MIT",
+  "author": "mogesangop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mogesangop/nexus-cli"
+  },
+  "homepage": "https://github.com/mogesangop/nexus-cli#readme",
+  "bugs": {
+    "url": "https://github.com/mogesangop/nexus-cli/issues"
+  },
+  "keywords": ["nexus", "nexus3", "nexus-repository", "cli", "guest-access"],
+  "engines": {
+    "node": ">=14"
+  },
+  "bin": {
+    "nexus-cli": "bin/nexus-cli.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md"
+  ]
+}
