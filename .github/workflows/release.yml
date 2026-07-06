@@ -79,7 +79,7 @@ jobs:
       - name: Publish
         run: |
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error::NPM_TOKEN secret is empty or not configured"
+            echo "::error::NPMJS_TOKEN secret is empty or not configured"
             exit 1
           fi
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
@@ -87,7 +87,7 @@ jobs:
           npm publish --access public --ignore-scripts
         working-directory: packaging/npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
 
   yum:
     name: Build RPMs and update yum repo

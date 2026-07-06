@@ -59,33 +59,34 @@ gpg --batch --armor --export "${GPG_KEY_ID}" > "${DIST}/RPM-GPG-KEY-nexus-cli"
 echo "==> configure gpg for non-interactive signing"
 mkdir -p "${HOME}/.gnupg" && chmod 700 "${HOME}/.gnupg"
 printf 'use-agent\npinentry-mode loopback\nbatch\n' > "${HOME}/.gnupg/gpg.conf"
-printf 'allow-loopback-pinentry\n' > "${HOME}/.gnupg/gpg-agent.conf"
+printf 'allow-loopback-pinentry\ndefault-cache-ttl 7200\nmax-cache-ttl 7200\n' > "${HOME}/.gnupg/gpg-agent.conf"
 gpgconf --kill gpg-agent 2>/dev/null || true
 
-# If the key has a passphrase, preset it into gpg-agent so rpm --addsign
-# (which calls gpg non-interactively) can unlock the key without a TTY.
-# No-op for passphrase-less keys.
-if [ -n "${GPG_PASSPHRASE:-}" ]; then
-  KEYGRIP=$(gpg --list-secret-keys --with-keygrip "${GPG_KEY_ID}" 2>/dev/null \
-            | awk '/Keygrip/ {print $3; exit}')
-  for preset in /usr/lib/gnupg2/gpg-preset-passphrase \
-                /usr/libexec/gpg-preset-passphrase; do
-    if [ -x "$preset" ] && [ -n "${KEYGRIP}" ]; then
-      printf '%s' "${GPG_PASSPHRASE}" | "$preset" --passphrase-fd 0 --preset "${KEYGRIP}" || true
-      break
-    fi
-  done
-fi
+# Write passphrase to a temp file so we can pass it to gpg via
+# --passphrase-file (avoids command-line exposure and special-char issues).
+# For passphrase-less keys the file is empty and gpg signs without it.
+PASS_FILE="$(mktemp)"
+printf '%s' "${GPG_PASSPHRASE:-}" > "${PASS_FILE}"
+chmod 600 "${PASS_FILE}"
+trap 'rm -f "${PASS_FILE}"' EXIT
 
-echo "==> sign rpms"
-# Do NOT override %__gpg_sign_cmd: rpm's built-in default uses the correct
-# platform-specific filename macro. Overriding it broke on Ubuntu's rpm
-# (%{__filename} was passed literally to gpg). We only set the key identity.
+GPG_BIN="$(command -v gpg || echo gpg)"
+
+# Override %__gpg_sign_cmd to inject --pinentry-mode loopback and
+# --passphrase-file so gpg never needs a TTY or gpg-agent to unlock the key.
+# %%{__filename} and %%{__signature_filename} use double-% so rpm expands
+# them at sign time (they are runtime-only macros). A single % would be
+# evaluated at macro-file load time when __filename is undefined, leaving a
+# literal '%{__filename}' string that gpg can't open.
 cat > "${HOME}/.rpmmacros" <<EOF
 %_signature gpg
 %_gpg_name ${GPG_KEY_ID}
+%__gpg_sign_cmd ${GPG_BIN} --batch --no-verbose --no-angle-brackets --yes --no-tty --pinentry-mode loopback --passphrase-file ${PASS_FILE} -u ${GPG_KEY_ID} -o %%{__signature_filename} --detach-sign %%{__filename}
 EOF
+
+echo "==> sign rpms"
 rpm --addsign "${DIST}"/nexus-cli-*.rpm
+echo "==> verify signatures"
 rpm --checksig "${DIST}"/nexus-cli-*.rpm
 
 echo "==> createrepo"

@@ -98,7 +98,7 @@ Repository secrets** 中配置以下 4 个 secret。全部是**一次性**配置
 
 | Secret 名 | 用途 | 必填 | 配置位置 |
 |---|---|---|---|
-| `NPM_TOKEN` | npm 发布鉴权 | 是(npm job) | [3.1](#31-npm-渠道配置) |
+| `NPMJS_TOKEN` | npm 发布鉴权 | 是(npm job) | [3.1](#31-npm-渠道配置) |
 | `GPG_PRIVATE_KEY` | 签名 RPM 的 GPG 私钥(ASCII-armored) | 是(yum job) | [3.2](#32-yumrpm-渠道配置) |
 | `GPG_PASSPHRASE` | GPG 私钥的口令(无口令则填空字符串) | 是(yum job) | [3.2](#32-yumrpm-渠道配置) |
 | `GPG_KEY_ID` | GPG 签名 key id(用于指定用哪把密钥签名) | 是(yum job) | [3.2](#32-yumrpm-渠道配置) |
@@ -190,11 +190,11 @@ packaging/npm/
 > Classic Automation token 更安全,推荐生产环境使用。但对新手来说
 > Classic Automation token 更简单。
 
-#### 3.1.4 配置 NPM_TOKEN secret
+#### 3.1.4 配置 NPMJS_TOKEN secret
 
 1. GitHub 仓库 → **Settings → Secrets and variables → Actions**。
 2. 点 **New repository secret**。
-3. **Name**: `NPM_TOKEN`
+3. **Name**: `NPMJS_TOKEN`
 4. **Secret**: 粘贴上一步复制的 token。
 5. 点 **Add secret**。
 
@@ -202,7 +202,7 @@ packaging/npm/
 
 ```sh
 # 用 token 临时登录(不写入 ~/.npmrc 的话用环境变量)
-npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN" --location=user
+npm config set //registry.npmjs.org/:_authToken "$NPMJS_TOKEN" --location=user
 
 # 查看当前登录身份
 npm whoami
@@ -228,7 +228,7 @@ npm --no-git-tag-version version 1.1.0
 
 # 3. 发布。--ignore-scripts 跳过 postinstall(发布机不需要下载二进制)
 #    --access public 让 scoped 包公开可见(默认是私有的,需要付费账号)
-NPM_TOKEN=你的token npm publish --access public --ignore-scripts
+NPMJS_TOKEN=你的token npm publish --access public --ignore-scripts
 
 # 4. 验证
 npm view @mogesang/nexus-cli version
@@ -613,7 +613,7 @@ rpm --checksig --verbose $(rpm -ql nexus-cli | head -1)
 
 | 症状 | 可能原因 | 解决 |
 |---|---|---|
-| `npm` job: `npm ERR! This command requires you to be logged in` | `NPM_TOKEN` 未配置或已过期 | 到 npmjs.com 重新生成 token,更新 GitHub secret |
+| `npm` job: `npm ERR! This command requires you to be logged in` | `NPMJS_TOKEN` 未配置或已过期 | 到 npmjs.com 重新生成 token,更新 GitHub secret |
 | `npm` job: `npm ERR! 403 Forbidden - You cannot publish over the previously published versions` | 该版本号已发布过(npm 不允许覆盖) | 打新 tag(如 `v1.1.1`),或先 `npm deprecate` 旧版本 |
 | `npm` job: `npm ERR! You must be logged in to publish packages` | scope 归属错误(账号不属于 `@mogesang` scope) | 确认 npm 账号是 `mogesang`,且包名用 `@mogesang/nexus-cli` |
 | `npm install` 后 `nexus-cli: binary not installed` | postinstall 被跳过(如 `--ignore-scripts` 安装)或下载失败 | 重新 `npm rebuild @mogesang/nexus-cli`;检查网络能否访问 github.com |
@@ -637,7 +637,7 @@ rpm --checksig --verbose $(rpm -ql nexus-cli | head -1)
 
 1. npmjs.com → Access Tokens → 删除旧 token。
 2. 生成新 Automation token。
-3. GitHub Settings → Secrets → 更新 `NPM_TOKEN`。
+3. GitHub Settings → Secrets → 更新 `NPMJS_TOKEN`。
 4. (可选)打一个 patch tag 验证 npm job 能正常发布。
 
 ### 7.2 轮换 GPG 密钥
