@@ -60,7 +60,7 @@ func newGuestSyncCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	c.Flags().BoolVar(&dryRun, "dry-run", false, "compute and print the plan without applying changes")
 	c.Flags().StringVar(&reportFile, "report", "", "write a report file under report.outputDir (e.g. guest-sync-report.txt)")
 	return c
@@ -89,7 +89,7 @@ func newGuestCheckCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	return c
 }
 

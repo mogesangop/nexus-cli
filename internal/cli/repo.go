@@ -45,7 +45,7 @@ func newRepoListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	return c
 }
 
@@ -83,7 +83,7 @@ func newRawApplyCmd() *cobra.Command {
 			return err
 		},
 	}
-	c.Flags().StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	c.Flags().BoolVar(&dryRun, "dry-run", false, "show changes without applying them")
 	return c
 }
@@ -126,7 +126,7 @@ func newRawEnsureCmd() *cobra.Command {
 		},
 	}
 	f := c.Flags()
-	f.StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	f.StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	f.StringVar(&name, "name", "", "repository name (required)")
 	f.StringVar(&blobStore, "blob-store", "", "existing Nexus blob store name (required)")
 	f.BoolVar(&online, "online", true, "make the repository online")
@@ -197,7 +197,7 @@ func newLifecycleActionCmd(run bool) *cobra.Command {
 		},
 	}
 	f := c.Flags()
-	f.StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	f.StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	f.StringVar(&repository, "repo", "", "raw hosted repository name (required)")
 	f.IntVar(&retentionDays, "retention-days", 0, "override retention age in days")
 	f.StringSliceVar(&includes, "include-path", nil, "RE2 path regex to include (repeatable)")

@@ -39,9 +39,14 @@ type commonFlags struct {
 	configPath string
 }
 
-// loadConfig reads and validates the config file.
+// loadConfig resolves the config file path and loads it. An empty path
+// triggers the standard search order (see config.Resolve).
 func loadConfig(path string) (*config.Config, error) {
-	return config.Load(path)
+	resolved, err := config.Resolve(path)
+	if err != nil {
+		return nil, err
+	}
+	return config.Load(resolved)
 }
 
 // newClient builds a Nexus client from config, resolving the password from the

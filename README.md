@@ -1,5 +1,7 @@
 # nexus-cli
 
+**English** | [中文](README.zh.md)
+
 [![CI](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -41,24 +43,27 @@ CGO_ENABLED=0 go build -o nexus-cli ./cmd/nexus-cli
 ## Quick start
 
 ```sh
-# 1. Generate a config template (generic placeholders).
-./nexus-cli config init --output config.yaml
+# 1. Generate a config template. Without --output it lands at
+#    ~/.nexus-cli/config.yaml (dir created with 0700 if missing).
+./nexus-cli config init
 
-# 2. Edit config.yaml: set baseUrl, roleName, and the readOnly / browseRead
+# 2. Edit the config: set baseUrl, roleName, and the readOnly / browseRead
 #    repository lists. Then export the admin password:
 export NEXUS_ADMIN_PASSWORD='your_password'
 
-# 3. Verify connectivity.
-./nexus-cli health check --config config.yaml
+# 3. Verify connectivity. --config is optional; if unset the CLI searches
+#    ./config.yaml, ~/.nexus-cli/config.yaml, /etc/nexus-cli/config.yaml
+#    (first match wins).
+./nexus-cli health check
 
 # 4. Preview the plan (no changes applied).
-./nexus-cli guest sync --config config.yaml --dry-run
+./nexus-cli guest sync --dry-run
 
 # 5. Apply.
-./nexus-cli guest sync --config config.yaml
+./nexus-cli guest sync
 
 # 6. Verify drift.
-./nexus-cli guest check --config config.yaml
+./nexus-cli guest check
 ```
 
 ### Grant a user path-scoped access to a repo
@@ -66,7 +71,6 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ```sh
 # Dry-run first: prints the selector/privilege/role/user that would be created.
 ./nexus-cli share grant \
-  --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -76,7 +80,6 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 # Apply. The generated password is printed ONCE to stdout — save it now.
 ./nexus-cli share grant \
-  --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -90,18 +93,23 @@ is never reset. Partial progress is not rolled back, so re-running is safe.
 
 ## Commands
 
+All commands accept an optional `--config <path>`. When omitted (or `--config ""`),
+the CLI searches `./config.yaml`, `~/.nexus-cli/config.yaml`, then
+`/etc/nexus-cli/config.yaml` — first existing file wins. An explicit `--config`
+is used verbatim (no search; a typo surfaces as a read error).
+
 | Command | Description |
 | --- | --- |
-| `config init --output config.yaml` | Generate a config template. |
-| `repo list --config config.yaml` | List all repositories (name, format, type). |
-| `repo raw apply --config config.yaml [--dry-run]` | Apply declared raw hosted repositories. |
+| `config init [--output config.yaml]` | Generate a config template (default: `~/.nexus-cli/config.yaml`). |
+| `repo list` | List all repositories (name, format, type). |
+| `repo raw apply [--dry-run]` | Apply declared raw hosted repositories. |
 | `repo raw ensure --name R --blob-store B [...]` | Create or safely update one raw hosted repository. |
 | `repo lifecycle preview --repo R [...]` | Read-only preview of expired raw components. |
 | `repo lifecycle run --repo R --yes [...]` | Delete expired raw components. |
-| `guest sync --config config.yaml [--dry-run] [--report FILE]` | Synchronize guest role privileges from config. |
-| `guest check --config config.yaml` | Read-only check that the guest role matches config. |
-| `share grant --config ... --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
-| `health check --config config.yaml` | Connectivity / API / auth health check. |
+| `guest sync [--dry-run] [--report FILE]` | Synchronize guest role privileges from config. |
+| `guest check` | Read-only check that the guest role matches config. |
+| `share grant --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
+| `health check` | Connectivity / API / auth health check. |
 
 ### `share grant` flags
 
@@ -163,9 +171,9 @@ skipped; stale managed privileges are removed.
 delete/recreates a conflicting repository. Preview changes and retention first:
 
 ```sh
-./nexus-cli repo raw apply --config config.yaml --dry-run
-./nexus-cli repo lifecycle preview --config config.yaml --repo devops-prod-generic
-./nexus-cli repo lifecycle run --config config.yaml --repo devops-prod-generic --yes
+./nexus-cli repo raw apply --dry-run
+./nexus-cli repo lifecycle preview --repo devops-prod-generic
+./nexus-cli repo lifecycle run --repo devops-prod-generic --yes
 ```
 
 The lifecycle run can be scheduled with cron. Deleting a Nexus component does

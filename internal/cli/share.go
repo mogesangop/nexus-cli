@@ -72,7 +72,7 @@ func newShareGrantCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	c.Flags().StringVar(&repo, "repo", "", "repository name (required)")
 	c.Flags().StringVar(&path, "path", "", "directory path, e.g. /team-a/ (required)")
 	c.Flags().StringVar(&userID, "user", "", "user id to create (required)")

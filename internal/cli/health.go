@@ -64,6 +64,6 @@ func newHealthCheckCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&cfgPath, "config", "config.yaml", "config file path")
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
 	return c
 }

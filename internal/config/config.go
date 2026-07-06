@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -277,4 +278,44 @@ func (c *Config) Password() (string, error) {
 		return "", fmt.Errorf("environment variable %s is not set or empty", c.Nexus.PasswordEnv)
 	}
 	return v, nil
+}
+
+// Resolve finds the config file path. If explicit is non-empty it is used
+// as-is (highest priority, no existence check — a typo surfaces as a Load
+// read error rather than silently falling through to search). Otherwise the
+// search order is:
+//
+//	./config.yaml, ~/.nexus-cli/config.yaml, /etc/nexus-cli/config.yaml
+//
+// First existing file wins. When $HOME is unset the home tier is skipped so
+// the CLI stays usable in headless containers. Returns an error listing all
+// searched paths when none exist.
+func Resolve(explicit string) (string, error) {
+	if explicit != "" {
+		return explicit, nil
+	}
+	var candidates []string
+	if cwdPath, err := filepath.Abs("config.yaml"); err == nil {
+		candidates = append(candidates, cwdPath)
+	} else {
+		candidates = append(candidates, "config.yaml")
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		candidates = append(candidates, filepath.Join(home, ".nexus-cli", "config.yaml"))
+	}
+	candidates = append(candidates, "/etc/nexus-cli/config.yaml")
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	var b strings.Builder
+	b.WriteString("no config file found. Searched:")
+	for _, p := range candidates {
+		b.WriteString("\n  - ")
+		b.WriteString(p)
+	}
+	b.WriteString("\nCreate one with `nexus-cli config init`, or pass --config <path>.")
+	return "", fmt.Errorf("%s", b.String())
 }

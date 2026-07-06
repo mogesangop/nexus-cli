@@ -1,5 +1,7 @@
 # nexus-cli
 
+[English](README.md) | **中文**
+
 [![CI](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/231397220/nexus-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -27,24 +29,26 @@ CGO_ENABLED=0 go build -o nexus-cli ./cmd/nexus-cli
 ## 快速开始
 
 ```sh
-# 1. 生成配置模板（通用占位符）。
-./nexus-cli config init --output config.yaml
+# 1. 生成配置模板。不传 --output 时默认写到 ~/.nexus-cli/config.yaml
+#    （目录不存在则按 0700 权限创建）。
+./nexus-cli config init
 
-# 2. 编辑 config.yaml：设置 baseUrl、roleName，以及 readOnly / browseRead
+# 2. 编辑配置：设置 baseUrl、roleName，以及 readOnly / browseRead
 #    仓库列表。然后导出管理员密码：
 export NEXUS_ADMIN_PASSWORD='your_password'
 
-# 3. 验证连通性。
-./nexus-cli health check --config config.yaml
+# 3. 验证连通性。--config 可省略；未指定时按以下顺序搜索首个存在的文件：
+#    ./config.yaml → ~/.nexus-cli/config.yaml → /etc/nexus-cli/config.yaml
+./nexus-cli health check
 
 # 4. 预览执行计划（不修改 Nexus）。
-./nexus-cli guest sync --config config.yaml --dry-run
+./nexus-cli guest sync --dry-run
 
 # 5. 执行同步。
-./nexus-cli guest sync --config config.yaml
+./nexus-cli guest sync
 
 # 6. 校验漂移。
-./nexus-cli guest check --config config.yaml
+./nexus-cli guest check
 ```
 
 ### 为用户授予某个仓库目录的访问权限
@@ -52,7 +56,6 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ```sh
 # 先 dry-run：打印将会创建的 selector/privilege/role/user。
 ./nexus-cli share grant \
-  --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -62,7 +65,6 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 # 正式执行。生成的密码只会打印一次到 stdout，请立即保存。
 ./nexus-cli share grant \
-  --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -74,18 +76,22 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 ## 命令
 
+所有命令都接受可选的 `--config <path>`。未指定（或传 `--config ""`）时，CLI 按以下顺序搜索首个存在的文件：
+`./config.yaml` → `~/.nexus-cli/config.yaml` → `/etc/nexus-cli/config.yaml`。
+显式传入 `--config` 时直接使用该路径（不搜索；路径写错会报读取错误）。
+
 | 命令 | 说明 |
 | --- | --- |
-| `config init --output config.yaml` | 生成配置模板。 |
-| `repo list --config config.yaml` | 列出所有仓库（name、format、type）。 |
-| `repo raw apply --config config.yaml [--dry-run]` | 应用配置中声明的 raw hosted 仓库。 |
+| `config init [--output config.yaml]` | 生成配置模板（默认：`~/.nexus-cli/config.yaml`）。 |
+| `repo list` | 列出所有仓库（name、format、type）。 |
+| `repo raw apply [--dry-run]` | 应用配置中声明的 raw hosted 仓库。 |
 | `repo raw ensure --name R --blob-store B [...]` | 创建或安全更新单个 raw hosted 仓库。 |
 | `repo lifecycle preview --repo R [...]` | 只读预览过期 raw 制品。 |
 | `repo lifecycle run --repo R --yes [...]` | 删除过期 raw 制品。 |
-| `guest sync --config config.yaml [--dry-run] [--report FILE]` | 按配置同步访客角色权限。 |
-| `guest check --config config.yaml` | 只读校验访客角色是否符合配置。 |
-| `share grant --config ... --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
-| `health check --config config.yaml` | 连接 / API / 认证健康检查。 |
+| `guest sync [--dry-run] [--report FILE]` | 按配置同步访客角色权限。 |
+| `guest check` | 只读校验访客角色是否符合配置。 |
+| `share grant --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
+| `health check` | 连接 / API / 认证健康检查。 |
 
 ### `share grant` 参数
 
@@ -135,9 +141,9 @@ deny > readOnly > browseRead > defaultPolicy
 `repo raw apply` 同样幂等。它不会迁移 blob store，也不会删除重建同名仓库。建议先执行：
 
 ```sh
-./nexus-cli repo raw apply --config config.yaml --dry-run
-./nexus-cli repo lifecycle preview --config config.yaml --repo devops-prod-generic
-./nexus-cli repo lifecycle run --config config.yaml --repo devops-prod-generic --yes
+./nexus-cli repo raw apply --dry-run
+./nexus-cli repo lifecycle preview --repo devops-prod-generic
+./nexus-cli repo lifecycle run --repo devops-prod-generic --yes
 ```
 
 生命周期可由 cron 定时调用。`run` 会删除 Nexus component，但磁盘空间仍需 Nexus 的 blob store compact 任务回收。

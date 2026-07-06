@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/231397220/nexus-cli/internal/config"
 	"github.com/spf13/cobra"
@@ -29,7 +30,14 @@ func newConfigInitCmd() *cobra.Command {
 		Short: "Generate a default config.yaml template",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if output == "" {
-				output = "config.yaml"
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("resolve home directory for default output: %w", err)
+				}
+				output = filepath.Join(home, ".nexus-cli", "config.yaml")
+			}
+			if err := os.MkdirAll(filepath.Dir(output), 0o700); err != nil {
+				return fmt.Errorf("create config directory: %w", err)
 			}
 			cfg := config.Default()
 			data, err := marshalYAML(cfg)
@@ -44,6 +52,6 @@ func newConfigInitCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVarP(&output, "output", "o", "config.yaml", "output config file path")
+	c.Flags().StringVarP(&output, "output", "o", "", "output config file path (default: ~/.nexus-cli/config.yaml)")
 	return c
 }
