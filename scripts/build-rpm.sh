@@ -6,7 +6,7 @@
 #   GPG_PRIVATE_KEY  - ASCII-armored private key
 #   GPG_KEY_ID       - signing key id
 #
-# Requires: fpm, rpm, rpmsign, createrepo, gpg
+# Requires: fpm, rpm, rpmsign, createrepo_c, gpg
 # Usage: scripts/build-rpm.sh <version> <amd64-binary> <arm64-binary>
 set -euo pipefail
 
@@ -71,7 +71,7 @@ rpm --checksig "${DIST}"/nexus-cli-*.rpm
 echo "==> createrepo"
 cp "${DIST}"/nexus-cli-*.rpm "${REPO_DIR}/"
 cp "${DIST}/RPM-GPG-KEY-nexus-cli" "${REPO_DIR}/"
-createrepo "${REPO_DIR}"
+createrepo_c "${REPO_DIR}"
 
 echo "==> built:"
 ls -lh "${DIST}"/nexus-cli-*.rpm

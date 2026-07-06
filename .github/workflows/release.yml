@@ -137,7 +137,7 @@ jobs:
           cp dist/nexus-cli-*.rpm site/rpm/
           cp dist/RPM-GPG-KEY-nexus-cli site/
           cp packaging/rpm/nexus-cli.repo site/
-          createrepo site/rpm
+          createrepo_c site/rpm
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
