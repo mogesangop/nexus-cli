@@ -81,7 +81,7 @@ GPG_BIN="$(command -v gpg || echo gpg)"
 cat > "${HOME}/.rpmmacros" <<EOF
 %_signature gpg
 %_gpg_name ${GPG_KEY_ID}
-%__gpg_sign_cmd ${GPG_BIN} --batch --no-verbose --no-angle-brackets --yes --no-tty --pinentry-mode loopback --passphrase-file ${PASS_FILE} -u ${GPG_KEY_ID} -o %%{__signature_filename} --detach-sign %%{__filename}
+%__gpg_sign_cmd ${GPG_BIN} --batch --no-verbose --yes --no-tty --pinentry-mode loopback --passphrase-file ${PASS_FILE} -u ${GPG_KEY_ID} -o %%{__signature_filename} --detach-sign %%{__filename}
 EOF
 
 echo "==> sign rpms"
