@@ -76,6 +76,13 @@ jobs:
         run: npm --no-git-tag-version version "${GITHUB_REF_NAME#v}"
         working-directory: packaging/npm
 
+      - name: Configure npm auth
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish
         run: npm publish --access public --ignore-scripts
         working-directory: packaging/npm

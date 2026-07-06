@@ -56,13 +56,37 @@ echo "==> import GPG key"
 echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
 gpg --batch --armor --export "${GPG_KEY_ID}" > "${DIST}/RPM-GPG-KEY-nexus-cli"
 
+echo "==> configure gpg for non-interactive signing"
+mkdir -p "${HOME}/.gnupg" && chmod 700 "${HOME}/.gnupg"
+printf 'use-agent\npinentry-mode loopback\nbatch\n' > "${HOME}/.gnupg/gpg.conf"
+printf 'allow-loopback-pinentry\n' > "${HOME}/.gnupg/gpg-agent.conf"
+gpgconf --kill gpg-agent 2>/dev/null || true
+
+# If the key has a passphrase, preset it into gpg-agent so rpm --addsign
+# (which calls gpg non-interactively) can unlock the key without a TTY.
+# No-op for passphrase-less keys.
+if [ -n "${GPG_PASSPHRASE:-}" ]; then
+  KEYGRIP=$(gpg --list-secret-keys --with-keygrip "${GPG_KEY_ID}" 2>/dev/null \
+            | awk '/Keygrip/ {print $3; exit}')
+  for preset in /usr/lib/gnupg2/gpg-preset-passphrase \
+                /usr/libexec/gpg-preset-passphrase; do
+    if [ -x "$preset" ] && [ -n "${KEYGRIP}" ]; then
+      printf '%s' "${GPG_PASSPHRASE}" | "$preset" --passphrase-fd 0 --preset "${KEYGRIP}" || true
+      break
+    fi
+  done
+fi
+
 echo "==> sign rpms"
+# Do NOT override %__gpg_sign_cmd: rpm's built-in default uses the correct
+# platform-specific filename macro. Overriding it broke on Ubuntu's rpm
+# (%{__filename} was passed literally to gpg). We only set the key identity.
 cat > "${HOME}/.rpmmacros" <<EOF
 %_signature gpg
 %_gpg_name ${GPG_KEY_ID}
-%__gpg_sign_cmd %{__gpg} gpg --batch --no-tty --pinentry-mode loopback --passphrase ${GPG_PASSPHRASE:-} --detach-sign --output %{__signature_filename} %{__filename}
 EOF
 rpm --addsign "${DIST}"/nexus-cli-*.rpm
+rpm --checksig "${DIST}"/nexus-cli-*.rpm
 
 echo "==> createrepo"
 cp "${DIST}"/nexus-cli-*.rpm "${REPO_DIR}/"
