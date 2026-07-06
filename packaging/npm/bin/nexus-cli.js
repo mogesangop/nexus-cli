@@ -11,7 +11,7 @@ const child = spawn(bin, process.argv.slice(2), { stdio: 'inherit', windowsHide:
 
 child.on('error', (err) => {
   if (err.code === 'ENOENT') {
-    console.error('nexus-cli: binary not installed. Run `npm rebuild @mogesangop/nexus-cli` or reinstall.');
+    console.error('nexus-cli: binary not installed. Run `npm rebuild @mogesang/nexus-cli` or reinstall.');
   } else {
     console.error('nexus-cli:', err);
   }

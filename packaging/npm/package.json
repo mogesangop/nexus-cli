@@ -1,9 +1,9 @@
 {
-  "name": "@mogesangop/nexus-cli",
+  "name": "@mogesang/nexus-cli",
   "version": "1.0.0",
   "description": "CLI for governing Nexus Repository 3.76 guest/anonymous access",
   "license": "MIT",
-  "author": "mogesangop",
+  "author": "mogesang",
   "repository": {
     "type": "git",
     "url": "https://github.com/mogesangop/nexus-cli"

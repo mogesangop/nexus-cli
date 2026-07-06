@@ -37,7 +37,7 @@ fits your environment.
 ### npm (cross-platform)
 
 ```sh
-npm i -g @mogesangop/nexus-cli
+npm i -g @mogesang/nexus-cli
 nexus-cli --help
 ```
 

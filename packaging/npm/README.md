@@ -1,4 +1,4 @@
-# @mogesangop/nexus-cli
+# @mogesang/nexus-cli
 
 A CLI for governing **Nexus Repository 3.76** guest / anonymous access.
 
@@ -10,14 +10,14 @@ https://github.com/mogesangop/nexus-cli.
 ## Install
 
 ```sh
-npm i -g @mogesangop/nexus-cli
+npm i -g @mogesang/nexus-cli
 nexus-cli --help
 ```
 
 Or one-off:
 
 ```sh
-npx @mogesangop/nexus-cli --help
+npx @mogesang/nexus-cli --help
 ```
 
 Supported platforms: linux / macOS / Windows on x64 / arm64.
