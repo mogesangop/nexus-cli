@@ -1,6 +1,7 @@
 # build artifact
 /nexus-cli
 /dist/
+/packaging/npm/vendor/
 
 # local config & runtime output
 /config.yaml

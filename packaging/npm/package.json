@@ -12,7 +12,13 @@
   "bugs": {
     "url": "https://github.com/mogesangop/nexus-cli/issues"
   },
-  "keywords": ["nexus", "nexus3", "nexus-repository", "cli", "guest-access"],
+  "keywords": [
+    "nexus",
+    "nexus3",
+    "nexus-repository",
+    "cli",
+    "guest-access"
+  ],
   "engines": {
     "node": ">=14"
   },
@@ -25,6 +31,7 @@
   "files": [
     "bin/",
     "scripts/",
+    "vendor/",
     "README.md"
   ]
 }

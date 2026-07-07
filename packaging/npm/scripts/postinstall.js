@@ -32,6 +32,8 @@ const url = `${base}/${asset}`;
 const sha256Url = `${url}.sha256`;
 
 const vendorDir = path.join(__dirname, '..', 'vendor');
+const bundledAssetPath = path.join(vendorDir, asset);
+const bundledSha256Path = `${bundledAssetPath}.sha256`;
 
 function fetchBuffer(url, redirects) {
   redirects = redirects || 0;
@@ -54,18 +56,23 @@ function fetchBuffer(url, redirects) {
   });
 }
 
-async function main() {
-  console.log(`nexus-cli: downloading ${asset} (v${version})`);
-  const data = await fetchBuffer(url);
-
-  console.log('nexus-cli: verifying sha256');
-  const shaFile = (await fetchBuffer(sha256Url)).toString('utf8').trim();
-  const expected = shaFile.split(/\s+/)[0];
-  const actual = crypto.createHash('sha256').update(data).digest('hex');
-  if (actual !== expected) {
-    throw new Error(`sha256 mismatch: expected ${expected}, got ${actual}`);
+async function loadAsset() {
+  if (fs.existsSync(bundledAssetPath) && fs.existsSync(bundledSha256Path)) {
+    console.log(`nexus-cli: using bundled ${asset} (v${version})`);
+    return {
+      data: fs.readFileSync(bundledAssetPath),
+      shaFile: fs.readFileSync(bundledSha256Path, 'utf8').trim(),
+    };
   }
 
+  console.log(`nexus-cli: downloading ${asset} (v${version})`);
+  return {
+    data: await fetchBuffer(url),
+    shaFile: (await fetchBuffer(sha256Url)).toString('utf8').trim(),
+  };
+}
+
+function extractArchive(data) {
   fs.mkdirSync(vendorDir, { recursive: true });
 
   if (PLATFORM === 'win32') {
@@ -73,14 +80,27 @@ async function main() {
     fs.writeFileSync(zipPath, data);
     execFileSync('tar', ['-xf', zipPath, '-C', vendorDir], { stdio: 'inherit' });
     fs.unlinkSync(zipPath);
-  } else {
-    const tgzPath = path.join(vendorDir, 'archive.tar.gz');
-    fs.writeFileSync(tgzPath, data);
-    execFileSync('tar', ['-xzf', tgzPath, '-C', vendorDir], { stdio: 'inherit' });
-    fs.unlinkSync(tgzPath);
-    fs.chmodSync(path.join(vendorDir, 'nexus-cli'), 0o755);
+    return;
   }
 
+  const tgzPath = path.join(vendorDir, 'archive.tar.gz');
+  fs.writeFileSync(tgzPath, data);
+  execFileSync('tar', ['-xzf', tgzPath, '-C', vendorDir], { stdio: 'inherit' });
+  fs.unlinkSync(tgzPath);
+  fs.chmodSync(path.join(vendorDir, 'nexus-cli'), 0o755);
+}
+
+async function main() {
+  const { data, shaFile } = await loadAsset();
+
+  console.log('nexus-cli: verifying sha256');
+  const expected = shaFile.split(/\s+/)[0];
+  const actual = crypto.createHash('sha256').update(data).digest('hex');
+  if (actual !== expected) {
+    throw new Error(`sha256 mismatch: expected ${expected}, got ${actual}`);
+  }
+
+  extractArchive(data);
   console.log('nexus-cli: installed');
 }
 
