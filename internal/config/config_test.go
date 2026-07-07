@@ -123,6 +123,81 @@ func TestValidateRawRepositories(t *testing.T) {
 	})
 }
 
+func TestValidateManagedRepositories(t *testing.T) {
+	valid := ManagedRepository{
+		Name: "npm-hosted", Format: "npm", Type: "hosted",
+		Settings: map[string]any{"name": "npm-hosted", "online": true},
+	}
+	t.Run("valid", func(t *testing.T) {
+		c := Default()
+		c.Repositories.Managed = []ManagedRepository{valid}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+	})
+	t.Run("missing format", func(t *testing.T) {
+		c := Default()
+		r := valid
+		r.Format = ""
+		c.Repositories.Managed = []ManagedRepository{r}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("duplicate", func(t *testing.T) {
+		c := Default()
+		c.Repositories.Managed = []ManagedRepository{valid, valid}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("settings name mismatch", func(t *testing.T) {
+		c := Default()
+		r := valid
+		r.Settings = map[string]any{"name": "other"}
+		c.Repositories.Managed = []ManagedRepository{r}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+}
+
+func TestValidateFileBlobStores(t *testing.T) {
+	valid := FileBlobStore{Name: "default", Path: "/nexus-data/blobs/default"}
+	t.Run("valid", func(t *testing.T) {
+		c := Default()
+		c.BlobStores.File = []FileBlobStore{valid}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+	})
+	t.Run("missing path", func(t *testing.T) {
+		c := Default()
+		b := valid
+		b.Path = ""
+		c.BlobStores.File = []FileBlobStore{b}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("duplicate", func(t *testing.T) {
+		c := Default()
+		c.BlobStores.File = []FileBlobStore{valid, valid}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+	t.Run("bad soft quota", func(t *testing.T) {
+		c := Default()
+		b := valid
+		b.SoftQuota = &SoftQuota{Type: "spaceRemainingQuota", Limit: 0}
+		c.BlobStores.File = []FileBlobStore{b}
+		if err := c.Validate(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+}
+
 func writeConfig(t *testing.T, path string) {
 	t.Helper()
 	data, err := Marshal(Default())

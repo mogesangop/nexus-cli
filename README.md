@@ -145,11 +145,18 @@ is used verbatim (no search; a typo surfaces as a read error).
 | Command | Description |
 | --- | --- |
 | `config init [--output config.yaml]` | Generate a config template (default: `~/.nexus-cli/config.yaml`). |
-| `repo list` | List all repositories (name, format, type). |
+| `repo list [--format F] [--type T]` | List repositories, optionally filtered by format/type. |
+| `repo get --name R --format F --type T` | Show one repository's full API payload. |
+| `repo apply [--dry-run]` | Apply generic repositories declared in `repositories.managed`. |
+| `repo ensure --name R --format F --type T --settings FILE [--dry-run]` | Create or update one generic repository from YAML/JSON settings. |
 | `repo raw apply [--dry-run]` | Apply declared raw hosted repositories. |
 | `repo raw ensure --name R --blob-store B [...]` | Create or safely update one raw hosted repository. |
 | `repo lifecycle preview --repo R [...]` | Read-only preview of expired raw components. |
 | `repo lifecycle run --repo R --yes [...]` | Delete expired raw components. |
+| `blobstore list` | List blob stores. |
+| `blobstore get --name B --type file` | Show one file blob store. |
+| `blobstore apply [--dry-run]` | Apply file blob stores declared in `blobStores.file`. |
+| `blobstore ensure --name B --path P [...]` | Create or update one file blob store. |
 | `guest sync [--dry-run] [--report FILE]` | Synchronize guest role privileges from config. |
 | `guest check` | Read-only check that the guest role matches config. |
 | `share grant --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
@@ -175,6 +182,9 @@ See `examples/config.example.yaml`. Key sections:
 - `nexus` — connection + credentials. `passwordEnv` names the env var holding
   the admin password (the password is never written to the file).
 - `repositories.raw` — desired raw hosted repositories and CLI retention rules.
+- `repositories.managed` — generic repository desired state for any
+  format/type. `settings` is passed through to the Nexus repository API body.
+- `blobStores.file` — desired file blob stores.
 - `guestAccess` — target role, repository policies, forbidden/warn privileges.
 - `privilegeNaming` — prefix (`priv_guest`), separator, dash replacement.
 - `audit` — JSONL audit log path and masking.
@@ -223,6 +233,11 @@ delete/recreates a conflicting repository. Preview changes and retention first:
 The lifecycle run can be scheduled with cron. Deleting a Nexus component does
 not immediately reclaim disk space; Nexus blob-store compaction is still
 required.
+
+`repo apply` and `blobstore apply` are also idempotent. For generic repositories,
+the CLI compares the declared `settings` fields against the live API payload and
+allows extra read-only fields returned by Nexus. A repository with the same name
+but a different format/type fails instead of being migrated.
 
 ## Security
 

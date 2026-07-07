@@ -71,6 +71,31 @@ repositories:
           - "^releases/.*"
         excludePaths:
           - "^releases/latest/.*"
+  # Generic repositories for any Nexus format/type. `settings` is passed to
+  # the Nexus repository API body; check the target Nexus Swagger for fields.
+  # 通用仓库配置，支持任意 Nexus format/type。`settings` 会透传到 Nexus
+  # 仓库 API 请求体；字段请以目标 Nexus 的 Swagger 为准。
+  managed:
+    - name: "npm-hosted"
+      format: "npm"
+      type: "hosted"
+      settings:
+        online: true
+        storage:
+          blobStoreName: "default"
+          strictContentTypeValidation: true
+          writePolicy: "ALLOW"
+
+# --- Blob stores / Blob Store ------------------------------------------------
+blobStores:
+  file:
+    - name: "default"
+      path: "/nexus-data/blobs/default"
+      # Optional soft quota. Uncomment and adjust if needed.
+      # 可选软配额。需要时取消注释并调整。
+      # softQuota:
+      #   type: "spaceRemainingQuota"
+      #   limit: 10737418240
 
 # --- Guest / anonymous access governance  /  访客 / 匿名访问治理 --------------
 # Controls the `guest sync` / `guest check` commands. The goal: a guest

@@ -124,11 +124,18 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | 命令 | 说明 |
 | --- | --- |
 | `config init [--output config.yaml]` | 生成配置模板（默认：`~/.nexus-cli/config.yaml`）。 |
-| `repo list` | 列出所有仓库（name、format、type）。 |
+| `repo list [--format F] [--type T]` | 列出仓库，可按 format/type 筛选。 |
+| `repo get --name R --format F --type T` | 查看单个仓库的完整 API 配置。 |
+| `repo apply [--dry-run]` | 应用 `repositories.managed` 中声明的通用仓库。 |
+| `repo ensure --name R --format F --type T --settings FILE [--dry-run]` | 从 YAML/JSON settings 创建或更新单个通用仓库。 |
 | `repo raw apply [--dry-run]` | 应用配置中声明的 raw hosted 仓库。 |
 | `repo raw ensure --name R --blob-store B [...]` | 创建或安全更新单个 raw hosted 仓库。 |
 | `repo lifecycle preview --repo R [...]` | 只读预览过期 raw 制品。 |
 | `repo lifecycle run --repo R --yes [...]` | 删除过期 raw 制品。 |
+| `blobstore list` | 列出 Blob Store。 |
+| `blobstore get --name B --type file` | 查看单个 file Blob Store。 |
+| `blobstore apply [--dry-run]` | 应用 `blobStores.file` 中声明的 file Blob Store。 |
+| `blobstore ensure --name B --path P [...]` | 创建或更新单个 file Blob Store。 |
 | `guest sync [--dry-run] [--report FILE]` | 按配置同步访客角色权限。 |
 | `guest check` | 只读校验访客角色是否符合配置。 |
 | `share grant --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
@@ -153,6 +160,8 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 - `nexus` —— 连接与凭证。`passwordEnv` 指定存放管理员密码的环境变量名（密码永不写入配置文件）。
 - `repositories.raw` —— raw hosted 仓库目标状态及 CLI 生命周期规则。
+- `repositories.managed` —— 任意 format/type 的通用仓库目标状态。`settings` 会透传到 Nexus 仓库 API 请求体。
+- `blobStores.file` —— file 类型 Blob Store 目标状态。
 - `guestAccess` —— 目标角色、仓库策略、禁止/警告权限。
 - `privilegeNaming` —— 前缀（`priv_guest`）、分隔符、短横线替换。
 - `audit` —— JSONL 审计日志路径与脱敏开关。
@@ -188,6 +197,8 @@ deny > readOnly > browseRead > defaultPolicy
 ```
 
 生命周期可由 cron 定时调用。`run` 会删除 Nexus component，但磁盘空间仍需 Nexus 的 blob store compact 任务回收。
+
+`repo apply` 和 `blobstore apply` 也具备幂等性。通用仓库会将配置中声明的 `settings` 字段与线上 API 返回值比较，允许 Nexus 返回额外只读字段。同名仓库如果 format/type 不一致会失败，不迁移、不删除重建。
 
 ## 安全
 

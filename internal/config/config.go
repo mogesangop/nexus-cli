@@ -19,6 +19,7 @@ import (
 type Config struct {
 	Nexus           NexusConfig        `yaml:"nexus"`
 	Repositories    RepositoriesConfig `yaml:"repositories,omitempty"`
+	BlobStores      BlobStoresConfig   `yaml:"blobStores,omitempty"`
 	GuestAccess     GuestAccess        `yaml:"guestAccess"`
 	PrivilegeNaming PrivilegeNaming    `yaml:"privilegeNaming"`
 	Audit           AuditConfig        `yaml:"audit"`
@@ -27,7 +28,16 @@ type Config struct {
 
 // RepositoriesConfig contains repositories managed by nexus-cli.
 type RepositoriesConfig struct {
-	Raw []RawRepository `yaml:"raw,omitempty"`
+	Raw     []RawRepository     `yaml:"raw,omitempty"`
+	Managed []ManagedRepository `yaml:"managed,omitempty"`
+}
+
+// ManagedRepository is a generic Nexus repository desired state.
+type ManagedRepository struct {
+	Name     string         `yaml:"name"`
+	Format   string         `yaml:"format"`
+	Type     string         `yaml:"type"`
+	Settings map[string]any `yaml:"settings"`
 }
 
 // RawRepository is the desired configuration of a raw hosted repository.
@@ -51,6 +61,23 @@ type LifecycleConfig struct {
 	RetentionDays int      `yaml:"retentionDays"`
 	IncludePaths  []string `yaml:"includePaths,omitempty"`
 	ExcludePaths  []string `yaml:"excludePaths,omitempty"`
+}
+
+// BlobStoresConfig contains blob stores managed by nexus-cli.
+type BlobStoresConfig struct {
+	File []FileBlobStore `yaml:"file,omitempty"`
+}
+
+// FileBlobStore is the desired configuration of a file blob store.
+type FileBlobStore struct {
+	Name      string     `yaml:"name"`
+	Path      string     `yaml:"path"`
+	SoftQuota *SoftQuota `yaml:"softQuota,omitempty"`
+}
+
+type SoftQuota struct {
+	Type  string `yaml:"type"`
+	Limit int64  `yaml:"limit"`
 }
 
 // NexusConfig holds connection settings for the target Nexus instance.
@@ -126,7 +153,8 @@ func Default() *Config {
 			TimeoutSeconds:        30,
 			InsecureSkipTLSVerify: false,
 		},
-		Repositories: RepositoriesConfig{Raw: []RawRepository{}},
+		Repositories: RepositoriesConfig{Raw: []RawRepository{}, Managed: []ManagedRepository{}},
+		BlobStores:   BlobStoresConfig{File: []FileBlobStore{}},
 		GuestAccess: GuestAccess{
 			Enabled:         true,
 			RoleName:        "role_guest_repository_access",
@@ -237,6 +265,51 @@ func (c *Config) Validate() error {
 		for _, expression := range append(append([]string{}, r.Lifecycle.IncludePaths...), r.Lifecycle.ExcludePaths...) {
 			if _, err := regexp.Compile(expression); err != nil {
 				return fmt.Errorf("repositories.raw[%d].lifecycle invalid path regex %q: %w", i, expression, err)
+			}
+		}
+	}
+	seenManagedRepos := make(map[string]struct{}, len(c.Repositories.Managed))
+	for i := range c.Repositories.Managed {
+		r := &c.Repositories.Managed[i]
+		if strings.TrimSpace(r.Name) == "" {
+			return fmt.Errorf("repositories.managed[%d].name is required", i)
+		}
+		if strings.TrimSpace(r.Format) == "" {
+			return fmt.Errorf("repositories.managed[%d].format is required", i)
+		}
+		if strings.TrimSpace(r.Type) == "" {
+			return fmt.Errorf("repositories.managed[%d].type is required", i)
+		}
+		if _, exists := seenManagedRepos[r.Name]; exists {
+			return fmt.Errorf("repositories.managed contains duplicate name %q", r.Name)
+		}
+		seenManagedRepos[r.Name] = struct{}{}
+		if r.Settings == nil {
+			r.Settings = map[string]any{}
+		}
+		if v, ok := r.Settings["name"].(string); ok && v != "" && v != r.Name {
+			return fmt.Errorf("repositories.managed[%d].settings.name must match name %q", i, r.Name)
+		}
+	}
+	seenFileBlobStores := make(map[string]struct{}, len(c.BlobStores.File))
+	for i := range c.BlobStores.File {
+		b := &c.BlobStores.File[i]
+		if strings.TrimSpace(b.Name) == "" {
+			return fmt.Errorf("blobStores.file[%d].name is required", i)
+		}
+		if strings.TrimSpace(b.Path) == "" {
+			return fmt.Errorf("blobStores.file[%d].path is required", i)
+		}
+		if _, exists := seenFileBlobStores[b.Name]; exists {
+			return fmt.Errorf("blobStores.file contains duplicate name %q", b.Name)
+		}
+		seenFileBlobStores[b.Name] = struct{}{}
+		if b.SoftQuota != nil {
+			if strings.TrimSpace(b.SoftQuota.Type) == "" {
+				return fmt.Errorf("blobStores.file[%d].softQuota.type is required", i)
+			}
+			if b.SoftQuota.Limit <= 0 {
+				return fmt.Errorf("blobStores.file[%d].softQuota.limit must be greater than zero", i)
 			}
 		}
 	}

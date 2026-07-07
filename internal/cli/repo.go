@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -9,18 +10,20 @@ import (
 	"github.com/231397220/nexus-cli/internal/config"
 	"github.com/231397220/nexus-cli/internal/lifecycle"
 	"github.com/231397220/nexus-cli/internal/rawrepo"
+	"github.com/231397220/nexus-cli/internal/repoctl"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 // NewRepoCmd builds the `repo` command tree.
 func NewRepoCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "repo", Short: "Nexus repository operations"}
-	cmd.AddCommand(newRepoListCmd(), newRawCmd(), newLifecycleCmd())
+	cmd.AddCommand(newRepoListCmd(), newRepoGetCmd(), newRepoApplyCmd(), newRepoEnsureCmd(), newRawCmd(), newLifecycleCmd())
 	return cmd
 }
 
 func newRepoListCmd() *cobra.Command {
-	var cfgPath string
+	var cfgPath, formatFilter, typeFilter string
 	c := &cobra.Command{
 		Use: "list", Short: "List all repositories (name, format, type)",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -38,15 +41,160 @@ func newRepoListCmd() *cobra.Command {
 			}
 			fmt.Println("Repository List")
 			fmt.Printf("%-32s %-12s %-12s\n", "Name", "Format", "Type")
+			count := 0
 			for _, r := range repos {
+				if formatFilter != "" && r.Format != formatFilter {
+					continue
+				}
+				if typeFilter != "" && r.Type != typeFilter {
+					continue
+				}
 				fmt.Printf("%-32s %-12s %-12s\n", r.Name, r.Format, r.Type)
+				count++
 			}
-			fmt.Printf("Total: %d\n", len(repos))
+			fmt.Printf("Total: %d\n", count)
 			return nil
 		},
 	}
 	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
+	c.Flags().StringVar(&formatFilter, "format", "", "filter by repository format")
+	c.Flags().StringVar(&typeFilter, "type", "", "filter by repository type")
 	return c
+}
+
+func newRepoGetCmd() *cobra.Command {
+	var cfgPath, name, format, typ string
+	c := &cobra.Command{
+		Use: "get", Short: "Get one repository by name, format, and type",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig(cfgPath)
+			if err != nil {
+				return err
+			}
+			client, err := newClient(cfg)
+			if err != nil {
+				return err
+			}
+			repo, err := client.GetRepository(format, typ, name)
+			if err != nil {
+				return err
+			}
+			data, err := json.MarshalIndent(repo, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(data))
+			return nil
+		},
+	}
+	f := c.Flags()
+	f.StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
+	f.StringVar(&name, "name", "", "repository name (required)")
+	f.StringVar(&format, "format", "", "repository format (required)")
+	f.StringVar(&typ, "type", "", "repository type (required)")
+	_ = c.MarkFlagRequired("name")
+	_ = c.MarkFlagRequired("format")
+	_ = c.MarkFlagRequired("type")
+	return c
+}
+
+func newRepoApplyCmd() *cobra.Command {
+	var cfgPath string
+	var dryRun bool
+	c := &cobra.Command{
+		Use: "apply", Short: "Apply generic repositories declared in config",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig(cfgPath)
+			if err != nil {
+				return err
+			}
+			client, err := newClient(cfg)
+			if err != nil {
+				return err
+			}
+			results, err := repoctl.New().Apply(client, cfg.Repositories.Managed, dryRun)
+			for _, result := range results {
+				fmt.Printf("%-32s %-10s %-10s %s\n", result.Name, result.Format, result.Type, result.Action)
+				writeManagedRepoAudit(cfg, "repo apply", result, nil)
+			}
+			if err != nil {
+				writeGeneralAudit(cfg, audit.Record{
+					Command: "repo apply", DryRun: dryRun, Action: "repository",
+					Result: "failed", ErrorMessage: err.Error(),
+				})
+			}
+			return err
+		},
+	}
+	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
+	c.Flags().BoolVar(&dryRun, "dry-run", false, "show changes without applying them")
+	return c
+}
+
+func newRepoEnsureCmd() *cobra.Command {
+	var cfgPath, name, format, typ, settingsPath string
+	var dryRun bool
+	c := &cobra.Command{
+		Use: "ensure", Short: "Create or update one generic repository from settings YAML/JSON",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			settings, err := readSettingsFile(settingsPath)
+			if err != nil {
+				return err
+			}
+			desired := config.ManagedRepository{Name: name, Format: format, Type: typ, Settings: settings}
+			probe := config.Default()
+			probe.Repositories.Managed = []config.ManagedRepository{desired}
+			if err := probe.Validate(); err != nil {
+				return err
+			}
+			cfg, err := loadConfig(cfgPath)
+			if err != nil {
+				return err
+			}
+			client, err := newClient(cfg)
+			if err != nil {
+				return err
+			}
+			result, err := repoctl.New().Ensure(client, probe.Repositories.Managed[0], dryRun)
+			if result != nil {
+				fmt.Printf("%-32s %-10s %-10s %s\n", result.Name, result.Format, result.Type, result.Action)
+				writeManagedRepoAudit(cfg, "repo ensure", *result, err)
+			} else if err != nil {
+				writeGeneralAudit(cfg, audit.Record{
+					Command: "repo ensure", DryRun: dryRun, Action: "repository",
+					Result: "failed", TargetRepo: name, ErrorMessage: err.Error(),
+				})
+			}
+			return err
+		},
+	}
+	f := c.Flags()
+	f.StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
+	f.StringVar(&name, "name", "", "repository name (required)")
+	f.StringVar(&format, "format", "", "repository format (required)")
+	f.StringVar(&typ, "type", "", "repository type (required)")
+	f.StringVar(&settingsPath, "settings", "", "YAML or JSON file containing repository settings (required)")
+	f.BoolVar(&dryRun, "dry-run", false, "show changes without applying them")
+	_ = c.MarkFlagRequired("name")
+	_ = c.MarkFlagRequired("format")
+	_ = c.MarkFlagRequired("type")
+	_ = c.MarkFlagRequired("settings")
+	return c
+}
+
+func readSettingsFile(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read settings %s: %w", path, err)
+	}
+	var settings map[string]any
+	if err := yaml.Unmarshal(data, &settings); err != nil {
+		return nil, fmt.Errorf("parse settings %s: %w", path, err)
+	}
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	return settings, nil
 }
 
 func newRawCmd() *cobra.Command {
@@ -234,6 +382,14 @@ func printLifecycleReport(r *lifecycle.Report) {
 }
 
 func writeRepoAudit(cfg *config.Config, command string, result rawrepo.Result, runErr error) {
+	writeGeneralAudit(cfg, audit.Record{
+		Command: command, DryRun: result.DryRun, Action: "repository",
+		Result: auditResult(runErr), TargetRepo: result.Name,
+		RepositoryAction: string(result.Action), ErrorMessage: errString(runErr),
+	})
+}
+
+func writeManagedRepoAudit(cfg *config.Config, command string, result repoctl.Result, runErr error) {
 	writeGeneralAudit(cfg, audit.Record{
 		Command: command, DryRun: result.DryRun, Action: "repository",
 		Result: auditResult(runErr), TargetRepo: result.Name,

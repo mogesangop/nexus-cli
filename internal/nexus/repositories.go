@@ -26,6 +26,32 @@ func (c *Client) ListRepositories() ([]Repository, error) {
 	return repos, nil
 }
 
+// GetRepository returns the full repository payload for a format/type/name.
+func (c *Client) GetRepository(format, typ, name string) (map[string]any, error) {
+	var out map[string]any
+	path := "/repositories/" + url.PathEscape(format) + "/" + url.PathEscape(typ) + "/" + url.PathEscape(name)
+	if err := c.get(path, &out); err != nil {
+		return nil, fmt.Errorf("get repository %s/%s/%s: %w", format, typ, name, err)
+	}
+	return out, nil
+}
+
+func (c *Client) CreateRepository(format, typ string, body map[string]any) error {
+	path := "/repositories/" + url.PathEscape(format) + "/" + url.PathEscape(typ)
+	if err := c.post(path, body, nil); err != nil {
+		return fmt.Errorf("create repository %s/%s/%v: %w", format, typ, body["name"], err)
+	}
+	return nil
+}
+
+func (c *Client) UpdateRepository(format, typ, name string, body map[string]any) error {
+	path := "/repositories/" + url.PathEscape(format) + "/" + url.PathEscape(typ) + "/" + url.PathEscape(name)
+	if err := c.put(path, body); err != nil {
+		return fmt.Errorf("update repository %s/%s/%s: %w", format, typ, name, err)
+	}
+	return nil
+}
+
 // RawHostedRepository is the Nexus raw hosted repository request/response.
 type RawHostedRepository struct {
 	Name      string             `json:"name"`

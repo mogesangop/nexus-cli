@@ -27,9 +27,11 @@ type Record struct {
 	TargetUser          string   `json:"targetUser,omitempty"`
 	TargetPath          string   `json:"targetPath,omitempty"`
 	TargetRepo          string   `json:"targetRepo,omitempty"`
+	TargetBlobStore     string   `json:"targetBlobStore,omitempty"`
 	CreatedSelectors    []string `json:"createdSelectors,omitempty"`
 	CreatedUsers        []string `json:"createdUsers,omitempty"`
 	RepositoryAction    string   `json:"repositoryAction,omitempty"`
+	BlobStoreAction     string   `json:"blobStoreAction,omitempty"`
 	RetentionDays       int      `json:"retentionDays,omitempty"`
 	IncludePaths        []string `json:"includePaths,omitempty"`
 	ExcludePaths        []string `json:"excludePaths,omitempty"`
