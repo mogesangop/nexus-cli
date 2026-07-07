@@ -38,6 +38,11 @@ SHA-256。
 
 ### 通过 yum / dnf 安装 RPM（RHEL、CentOS、Rocky、Alma、Fedora）
 
+YUM 仓库由本项目的 GitHub Pages 托管，每次发布标签触发后自动重建。
+仓库提供 x86_64 和 aarch64 软件包，所有 RPM 均带有 GPG 签名。
+
+#### dnf（Fedora、RHEL 8+、Rocky、Alma）
+
 ```sh
 # 添加软件源配置并导入 RPM 签名公钥。
 sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
@@ -45,13 +50,24 @@ sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
 sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
 
 # 安装并验证。
-sudo dnf install nexus-cli   # 使用 yum 的系统请执行：yum install nexus-cli
+sudo dnf install nexus-cli
 nexus-cli --help
 rpm -q nexus-cli
 ```
 
-YUM 仓库由本项目的 GitHub Pages 托管，每次发布标签触发后自动重建。
-仓库提供 x86_64 和 aarch64 软件包，所有 RPM 均带有 GPG 签名。
+#### yum（RHEL 7、CentOS 7）
+
+```sh
+# 添加软件源配置并导入 RPM 签名公钥。
+sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
+  https://mogesangop.github.io/nexus-cli/nexus-cli.repo
+sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
+
+# 安装并验证。
+sudo yum install nexus-cli
+nexus-cli --help
+rpm -q nexus-cli
+```
 
 ### 直接下载
 

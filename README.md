@@ -58,6 +58,12 @@ Releases and verifies its sha256.
 
 ### RPM via yum / dnf (RHEL, CentOS, Rocky, Alma, Fedora)
 
+The yum repo is a static tree served from this project's GitHub Pages and
+is rebuilt on every release tag. It provides x86_64 and aarch64 packages;
+all RPMs are GPG-signed.
+
+#### dnf (Fedora, RHEL 8+, Rocky, Alma)
+
 ```sh
 # Add the repository configuration and import its signing key.
 sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
@@ -65,14 +71,24 @@ sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
 sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
 
 # Install and verify.
-sudo dnf install nexus-cli   # use `yum install nexus-cli` on yum-based systems
+sudo dnf install nexus-cli
 nexus-cli --help
 rpm -q nexus-cli
 ```
 
-The yum repo is a static tree served from this project's GitHub Pages and
-is rebuilt on every release tag. It provides x86_64 and aarch64 packages;
-all RPMs are GPG-signed.
+#### yum (RHEL 7, CentOS 7)
+
+```sh
+# Add the repository configuration and import its signing key.
+sudo curl -o /etc/yum.repos.d/nexus-cli.repo \
+  https://mogesangop.github.io/nexus-cli/nexus-cli.repo
+sudo rpm --import https://mogesangop.github.io/nexus-cli/RPM-GPG-KEY-nexus-cli
+
+# Install and verify.
+sudo yum install nexus-cli
+nexus-cli --help
+rpm -q nexus-cli
+```
 
 ### Direct download
 
