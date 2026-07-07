@@ -46,6 +46,60 @@ nexus:
   # 生产环境切勿开启。
   insecureSkipTLSVerify: false
 
+# --- Warm-standby HA / 主从温备 HA ------------------------------------------
+# Optional. When disabled or omitted, all existing single-node commands keep
+# using the `nexus` section above exactly as before.
+# 可选。关闭或省略时，现有单节点命令仍完全按上方 `nexus` 配置运行。
+ha:
+  enabled: false
+  # Local node role. Must be primary or standby.
+  # 当前配置所在节点角色。只能是 primary 或 standby。
+  role: "primary"
+  nodes:
+    - name: "primary"
+      role: "primary"
+      baseUrl: "http://nexus-a.example.com"
+      username: "admin"
+      passwordEnv: "NEXUS_PRIMARY_PASSWORD"
+    - name: "standby"
+      role: "standby"
+      baseUrl: "http://nexus-b.example.com"
+      username: "admin"
+      passwordEnv: "NEXUS_STANDBY_PASSWORD"
+  replication:
+    # Local JSON state written by `nexus-cli ha sync --once` and read by
+    # `nexus-cli ha status`. Keep it on durable local storage if possible.
+    # `nexus-cli ha sync --once` 写入、`nexus-cli ha status` 读取的本地状态文件。
+    # 建议放在持久化本地磁盘。
+    stateFile: "./logs/nexus-cli-ha-state.json"
+    blobSync:
+      method: "rsync"
+      schedule: "*/5 * * * *"
+      # Operator-owned command executed by `nexus-cli ha sync --once`.
+      # It should copy blob data from current primary to standby, including
+      # deletes, and be safe to rerun. Example:
+      # command: "rsync -a --delete nexus-a:/nexus-data/blobs/default/ nexus-b:/nexus-data/blobs/default/"
+      # 由运维维护、供 `nexus-cli ha sync --once` 执行的命令。
+      # 应从当前主节点向从节点复制 blob（包含删除），并可幂等重跑。示例：
+      # command: "rsync -a --delete nexus-a:/nexus-data/blobs/default/ nexus-b:/nexus-data/blobs/default/"
+      command: ""
+    metadataSync:
+      method: "export-import"
+      schedule: "*/15 * * * *"
+      # Wrap your Nexus Export database -> transfer -> Import database flow in
+      # one command or script. The CLI records success/failure but does not
+      # store Nexus task credentials here.
+      # 将 Nexus Export database -> 传输 -> Import database 流程封装为一个命令或脚本。
+      # CLI 只记录成功/失败，不在此保存 Nexus 任务凭证。
+      command: ""
+  failover:
+    mode: "manual"
+    # Keep true in production. `ha failover` then requires
+    # --fencing-confirmed before printing the F5 switch steps.
+    # 生产环境建议保持 true。此时 `ha failover` 必须传入
+    # --fencing-confirmed 才会进入 F5 切换指引。
+    requireFencing: true
+
 # --- Managed raw hosted repositories / 托管的 raw hosted 仓库 ----------------
 repositories:
   raw:

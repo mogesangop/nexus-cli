@@ -15,6 +15,8 @@
 
 第三个用例是管理 `raw/hosted` 仓库及 Community/OSS 环境下的制品生命周期。CLI 可以幂等创建或安全更新仓库，并按文件最后修改时间与路径规则预览、删除过期制品。完整规格见 `doc/raw仓库与制品生命周期PRD.md`。
 
+第四个用例是支撑 **Nexus OSS 主从温备 HA 运维**：两台独立 Nexus 节点、F5 单活入口、定时复制 blob / 元数据、人工 fencing 与引导式故障切换。CLI 不自动调用 F5，也不承诺零 RPO；它提供双节点健康/状态、一次性同步命令执行、fencing 门禁和审计记录。完整规格见 `doc/nexus主从HA模式PRD.md`。
+
 ## 安装
 
 每次发布都会提供预编译二进制，可根据运行环境选择 npm 或 RPM 安装。
@@ -140,6 +142,10 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | `guest check` | 只读校验访客角色是否符合配置。 |
 | `share grant --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
 | `health check` | 连接 / API / 认证健康检查。 |
+| `ha status` | 查看双节点健康、blob / 元数据最后同步时间与延迟。 |
+| `ha health` | 对两个 HA 节点分别执行 API 健康检查。 |
+| `ha sync --once [--timeout 30m]` | 执行配置中的 blob 与元数据同步命令一次，并更新 HA 状态文件。 |
+| `ha failover --from primary --to standby --fencing-confirmed` | 引导安全人工切换：fencing 门禁、可选追赶同步、打印 F5 步骤并写审计。 |
 
 ### `share grant` 参数
 
@@ -162,10 +168,109 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 - `repositories.raw` —— raw hosted 仓库目标状态及 CLI 生命周期规则。
 - `repositories.managed` —— 任意 format/type 的通用仓库目标状态。`settings` 会透传到 Nexus 仓库 API 请求体。
 - `blobStores.file` —— file 类型 Blob Store 目标状态。
+- `ha` —— 可选主从温备配置：双节点、复制命令、状态文件与人工切换安全门禁。
 - `guestAccess` —— 目标角色、仓库策略、禁止/警告权限。
 - `privilegeNaming` —— 前缀（`priv_guest`）、分隔符、短横线替换。
 - `audit` —— JSONL 审计日志路径与脱敏开关。
 - `report` —— 报告目录与格式（`text` | `json`）。
+
+## 主从温备 HA 用法
+
+HA 模式遵循 `doc/nexus主从HA模式PRD.md` 的硬约束：Nexus Repository OSS 没有原生 active-active 或主从同步。本 CLI 提供的是运维引导式温备流程，不是同步复制。
+
+### 1. 配置双节点与同步命令
+
+在 `config.yaml` 增加启用的 `ha` 段。密码仍只从环境变量读取。
+
+```yaml
+ha:
+  enabled: true
+  role: "primary"
+  nodes:
+    - name: "primary"
+      role: "primary"
+      baseUrl: "http://nexus-a.example.com"
+      username: "admin"
+      passwordEnv: "NEXUS_PRIMARY_PASSWORD"
+    - name: "standby"
+      role: "standby"
+      baseUrl: "http://nexus-b.example.com"
+      username: "admin"
+      passwordEnv: "NEXUS_STANDBY_PASSWORD"
+  replication:
+    stateFile: "./logs/nexus-cli-ha-state.json"
+    blobSync:
+      method: "rsync"
+      schedule: "*/5 * * * *"
+      command: "rsync -a --delete nexus-a:/nexus-data/blobs/default/ nexus-b:/nexus-data/blobs/default/"
+    metadataSync:
+      method: "export-import"
+      schedule: "*/15 * * * *"
+      command: "/opt/nexus-ha/sync-metadata.sh"
+  failover:
+    mode: "manual"
+    requireFencing: true
+```
+
+`blobSync.command` 和 `metadataSync.command` 是运维维护的本地命令或脚本，需可幂等重跑，失败时返回非零状态。元数据脚本通常封装 Nexus Export database → 传输完成包 → 在从节点触发 Import database。
+
+运行前导出两个节点密码：
+
+```sh
+export NEXUS_PRIMARY_PASSWORD='primary_admin_password'
+export NEXUS_STANDBY_PASSWORD='standby_admin_password'
+```
+
+### 2. 巡检双节点
+
+```sh
+nexus-cli ha health --config config.yaml
+nexus-cli ha status --config config.yaml
+```
+
+`ha health` 对两节点分别检查仓库、权限和 guest role API；`ha status` 还会读取 `ha.replication.stateFile`，展示 blob / 元数据最后成功同步时间、延迟和最近错误。
+
+### 3. 执行一次追赶同步
+
+```sh
+nexus-cli ha sync --once --config config.yaml --timeout 45m
+```
+
+命令先执行 `blobSync.command`，再执行 `metadataSync.command`。任一阶段失败即停止，并把结果写入 HA 状态文件。同步命令为空会快速失败，并提示需要补哪个配置字段。
+
+定时复制可由 cron/systemd timer 调用实际同步脚本，也可在配置好命令后定时调用 `nexus-cli ha sync --once`。
+
+### 4. 人工故障切换
+
+主节点故障时，先停止或隔离旧主，确认不存在双写路径，然后执行：
+
+```sh
+nexus-cli ha failover \
+  --config config.yaml \
+  --from primary \
+  --to standby \
+  --fencing-confirmed
+```
+
+默认会先执行一次最终追赶同步，再打印 F5 切换检查项。如果旧主硬故障导致无法同步，只能在接受 RPO 缺口后使用 `--skip-sync`：
+
+```sh
+nexus-cli ha failover \
+  --config config.yaml \
+  --from primary \
+  --to standby \
+  --fencing-confirmed \
+  --skip-sync
+```
+
+在 F5 将 standby 设置为唯一 active pool member 后，建议验证：
+
+```sh
+nexus-cli ha status --config config.yaml
+nexus-cli guest check --config config.yaml
+```
+
+每次 `ha sync --once` 和 `ha failover` 都会通过现有审计日志写入 JSONL 记录；记录中不会包含密码或 Authorization header。
 
 ### 仓库策略优先级（每个仓库）
 

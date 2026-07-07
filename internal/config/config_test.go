@@ -30,6 +30,98 @@ func TestValidate_OK(t *testing.T) {
 	}
 }
 
+func TestValidateHAConfig(t *testing.T) {
+	valid := func() *Config {
+		c := Default()
+		c.HA.Enabled = true
+		c.HA.Role = "primary"
+		c.HA.Nodes = []HANodeConfig{
+			{Name: "primary", Role: "primary", BaseURL: "http://nexus-a.example.com", PasswordEnv: "NEXUS_PRIMARY_PASSWORD"},
+			{Name: "standby", Role: "standby", BaseURL: "http://nexus-b.example.com", PasswordEnv: "NEXUS_STANDBY_PASSWORD"},
+		}
+		return c
+	}
+	t.Run("valid", func(t *testing.T) {
+		c := valid()
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+		if !c.HA.Failover.RequireFencing {
+			t.Fatal("default requireFencing should be true")
+		}
+	})
+	t.Run("disabled stays backward compatible", func(t *testing.T) {
+		c := Default()
+		c.HA.Enabled = false
+		c.HA.Nodes = nil
+		if err := c.Validate(); err != nil {
+			t.Fatalf("Validate disabled HA: %v", err)
+		}
+	})
+	t.Run("requires exact pair", func(t *testing.T) {
+		c := valid()
+		c.HA.Nodes[1].Role = "primary"
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "exactly one primary and one standby") {
+			t.Fatalf("expected role-pair error, got %v", err)
+		}
+	})
+	t.Run("rejects bad failover mode", func(t *testing.T) {
+		c := valid()
+		c.HA.Failover.Mode = "auto"
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "ha.failover.mode") {
+			t.Fatalf("expected failover mode error, got %v", err)
+		}
+	})
+}
+
+func TestLoadHAFailoverRequireFencingDefaultsTrue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ha.yaml")
+	yaml := `nexus:
+  baseUrl: "http://nexus.example.com"
+  username: "admin"
+  passwordEnv: "NEXUS_ADMIN_PASSWORD"
+  timeoutSeconds: 30
+guestAccess:
+  roleName: "role_guest_repository_access"
+  defaultPolicy: "browseRead"
+privilegeNaming:
+  prefix: "priv_guest"
+  separator: "_"
+audit:
+  enabled: true
+  logPath: "./logs/audit.log"
+report:
+  enabled: true
+  outputDir: "./reports"
+  format: "text"
+ha:
+  enabled: true
+  role: "primary"
+  nodes:
+    - name: "primary"
+      role: "primary"
+      baseUrl: "http://nexus-a.example.com"
+      passwordEnv: "NEXUS_PRIMARY_PASSWORD"
+    - name: "standby"
+      role: "standby"
+      baseUrl: "http://nexus-b.example.com"
+      passwordEnv: "NEXUS_STANDBY_PASSWORD"
+  failover:
+    mode: "manual"
+`
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.HA.Failover.RequireFencing {
+		t.Fatal("requireFencing should default to true")
+	}
+}
+
 func TestPassword_FromEnv(t *testing.T) {
 	c := Default()
 	t.Setenv("NEXUS_ADMIN_PASSWORD", "s3cr3t")

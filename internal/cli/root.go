@@ -27,7 +27,7 @@ func NewRoot() *Root {
 			"role permissions so a repository can be hidden from the UI while " +
 			"remaining downloadable via exact URL. See doc/ for the PRD.",
 	}
-	root.AddCommand(NewConfigCmd(), NewRepoCmd(), NewBlobStoreCmd(), NewGuestCmd(), NewHealthCmd(), NewShareCmd())
+	root.AddCommand(NewConfigCmd(), NewRepoCmd(), NewBlobStoreCmd(), NewGuestCmd(), NewHealthCmd(), NewShareCmd(), NewHACmd())
 	return &Root{cmd: root}
 }
 

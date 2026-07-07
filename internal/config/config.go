@@ -18,6 +18,7 @@ import (
 // Config is the root configuration object.
 type Config struct {
 	Nexus           NexusConfig        `yaml:"nexus"`
+	HA              HAConfig           `yaml:"ha,omitempty"`
 	Repositories    RepositoriesConfig `yaml:"repositories,omitempty"`
 	BlobStores      BlobStoresConfig   `yaml:"blobStores,omitempty"`
 	GuestAccess     GuestAccess        `yaml:"guestAccess"`
@@ -89,6 +90,58 @@ type NexusConfig struct {
 	InsecureSkipTLSVerify bool   `yaml:"insecureSkipTLSVerify"`
 }
 
+// HAConfig holds the optional warm-standby HA settings. When Enabled is false
+// or the section is omitted, nexus-cli keeps its single-node behavior.
+type HAConfig struct {
+	Enabled     bool                `yaml:"enabled"`
+	Role        string              `yaml:"role"`
+	Nodes       []HANodeConfig      `yaml:"nodes"`
+	Replication HAReplicationConfig `yaml:"replication"`
+	Failover    HAFailoverConfig    `yaml:"failover"`
+}
+
+// HANodeConfig describes one Nexus node participating in the warm-standby pair.
+type HANodeConfig struct {
+	Name        string `yaml:"name"`
+	Role        string `yaml:"role"`
+	BaseURL     string `yaml:"baseUrl"`
+	Username    string `yaml:"username,omitempty"`
+	PasswordEnv string `yaml:"passwordEnv"`
+}
+
+// HAReplicationConfig configures operator-provided one-shot sync commands and
+// the state file used by `ha status`.
+type HAReplicationConfig struct {
+	StateFile    string       `yaml:"stateFile"`
+	BlobSync     HASyncConfig `yaml:"blobSync"`
+	MetadataSync HASyncConfig `yaml:"metadataSync"`
+}
+
+// HASyncConfig describes one replication lane.
+type HASyncConfig struct {
+	Method   string `yaml:"method"`
+	Schedule string `yaml:"schedule"`
+	Command  string `yaml:"command,omitempty"`
+}
+
+// HAFailoverConfig controls the safety gates for manual failover guidance.
+type HAFailoverConfig struct {
+	Mode           string `yaml:"mode"`
+	RequireFencing bool   `yaml:"requireFencing"`
+}
+
+// UnmarshalYAML gives requireFencing a safe default even when the failover
+// section is present but the field is omitted.
+func (h *HAFailoverConfig) UnmarshalYAML(value *yaml.Node) error {
+	type raw HAFailoverConfig
+	defaulted := raw{Mode: "manual", RequireFencing: true}
+	if err := value.Decode(&defaulted); err != nil {
+		return err
+	}
+	*h = HAFailoverConfig(defaulted)
+	return nil
+}
+
 // GuestAccess configures the guest/anonymous role permission sync.
 type GuestAccess struct {
 	Enabled             bool           `yaml:"enabled"`
@@ -152,6 +205,25 @@ func Default() *Config {
 			PasswordEnv:           "NEXUS_ADMIN_PASSWORD",
 			TimeoutSeconds:        30,
 			InsecureSkipTLSVerify: false,
+		},
+		HA: HAConfig{
+			Enabled: false,
+			Role:    "primary",
+			Replication: HAReplicationConfig{
+				StateFile: "./logs/nexus-cli-ha-state.json",
+				BlobSync: HASyncConfig{
+					Method:   "rsync",
+					Schedule: "*/5 * * * *",
+				},
+				MetadataSync: HASyncConfig{
+					Method:   "export-import",
+					Schedule: "*/15 * * * *",
+				},
+			},
+			Failover: HAFailoverConfig{
+				Mode:           "manual",
+				RequireFencing: true,
+			},
 		},
 		Repositories: RepositoriesConfig{Raw: []RawRepository{}, Managed: []ManagedRepository{}},
 		BlobStores:   BlobStoresConfig{File: []FileBlobStore{}},
@@ -229,6 +301,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Nexus.TimeoutSeconds <= 0 {
 		c.Nexus.TimeoutSeconds = 30
+	}
+	if err := c.validateHA(); err != nil {
+		return err
 	}
 	seenRepos := make(map[string]struct{}, len(c.Repositories.Raw))
 	for i := range c.Repositories.Raw {
@@ -330,6 +405,87 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func (c *Config) validateHA() error {
+	if c.HA.Failover.Mode == "" {
+		c.HA.Failover.Mode = "manual"
+		c.HA.Failover.RequireFencing = true
+	}
+	if c.HA.Replication.StateFile == "" {
+		c.HA.Replication.StateFile = "./logs/nexus-cli-ha-state.json"
+	}
+	if c.HA.Replication.BlobSync.Method == "" {
+		c.HA.Replication.BlobSync.Method = "rsync"
+	}
+	if c.HA.Replication.BlobSync.Schedule == "" {
+		c.HA.Replication.BlobSync.Schedule = "*/5 * * * *"
+	}
+	if c.HA.Replication.MetadataSync.Method == "" {
+		c.HA.Replication.MetadataSync.Method = "export-import"
+	}
+	if c.HA.Replication.MetadataSync.Schedule == "" {
+		c.HA.Replication.MetadataSync.Schedule = "*/15 * * * *"
+	}
+	if !c.HA.Enabled {
+		return nil
+	}
+	switch c.HA.Role {
+	case "primary", "standby":
+	default:
+		return fmt.Errorf("ha.role must be primary or standby")
+	}
+	if c.HA.Failover.Mode != "manual" {
+		return fmt.Errorf("ha.failover.mode must be manual")
+	}
+	switch c.HA.Replication.BlobSync.Method {
+	case "rsync", "rclone":
+	default:
+		return fmt.Errorf("ha.replication.blobSync.method must be rsync or rclone")
+	}
+	if c.HA.Replication.BlobSync.Schedule == "" {
+		return fmt.Errorf("ha.replication.blobSync.schedule is required")
+	}
+	if c.HA.Replication.MetadataSync.Method != "export-import" {
+		return fmt.Errorf("ha.replication.metadataSync.method must be export-import")
+	}
+	if c.HA.Replication.MetadataSync.Schedule == "" {
+		return fmt.Errorf("ha.replication.metadataSync.schedule is required")
+	}
+	if len(c.HA.Nodes) != 2 {
+		return fmt.Errorf("ha.nodes must contain exactly one primary and one standby node")
+	}
+	seenNames := map[string]struct{}{}
+	roleCounts := map[string]int{}
+	for i := range c.HA.Nodes {
+		n := &c.HA.Nodes[i]
+		if strings.TrimSpace(n.Name) == "" {
+			return fmt.Errorf("ha.nodes[%d].name is required", i)
+		}
+		if _, exists := seenNames[n.Name]; exists {
+			return fmt.Errorf("ha.nodes contains duplicate name %q", n.Name)
+		}
+		seenNames[n.Name] = struct{}{}
+		switch n.Role {
+		case "primary", "standby":
+			roleCounts[n.Role]++
+		default:
+			return fmt.Errorf("ha.nodes[%d].role must be primary or standby", i)
+		}
+		if strings.TrimSpace(n.BaseURL) == "" {
+			return fmt.Errorf("ha.nodes[%d].baseUrl is required", i)
+		}
+		if strings.TrimSpace(n.PasswordEnv) == "" {
+			return fmt.Errorf("ha.nodes[%d].passwordEnv is required", i)
+		}
+		if strings.TrimSpace(n.Username) == "" {
+			n.Username = c.Nexus.Username
+		}
+	}
+	if roleCounts["primary"] != 1 || roleCounts["standby"] != 1 {
+		return fmt.Errorf("ha.nodes must contain exactly one primary and one standby node")
+	}
+	return nil
+}
+
 // Marshal renders the config as YAML with a leading header comment.
 func Marshal(c *Config) ([]byte, error) {
 	out, err := yaml.Marshal(c)
@@ -349,6 +505,18 @@ func (c *Config) Password() (string, error) {
 	v := os.Getenv(c.Nexus.PasswordEnv)
 	if strings.TrimSpace(v) == "" {
 		return "", fmt.Errorf("environment variable %s is not set or empty", c.Nexus.PasswordEnv)
+	}
+	return v, nil
+}
+
+// HANodePassword resolves the password for an HA node by name.
+func (c *Config) HANodePassword(node HANodeConfig) (string, error) {
+	if node.PasswordEnv == "" {
+		return "", fmt.Errorf("ha.nodes[%s].passwordEnv is not set in config", node.Name)
+	}
+	v := os.Getenv(node.PasswordEnv)
+	if strings.TrimSpace(v) == "" {
+		return "", fmt.Errorf("environment variable %s is not set or empty", node.PasswordEnv)
 	}
 	return v, nil
 }

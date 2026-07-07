@@ -29,6 +29,13 @@ Nexus Community/OSS. The CLI safely reconciles repository settings and can
 preview or delete old files using last-modified age and path rules. See
 `doc/raw仓库与制品生命周期PRD.md`.
 
+A fourth use case supports **warm-standby HA operations** for Nexus OSS: two
+independent Nexus nodes, one active F5 upstream, periodic blob / metadata
+replication, manual fencing, and guided failover. The CLI does not automate F5
+or claim zero RPO; it provides dual-node health/status, one-shot sync command
+execution, fencing gates, and audit records. See
+`doc/nexus主从HA模式PRD.md`.
+
 ## Install
 
 Prebuilt binaries are published with each release. Pick whichever channel
@@ -161,6 +168,10 @@ is used verbatim (no search; a typo surfaces as a read error).
 | `guest check` | Read-only check that the guest role matches config. |
 | `share grant --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
 | `health check` | Connectivity / API / auth health check. |
+| `ha status` | Show both HA node health plus last blob / metadata sync time and lag. |
+| `ha health` | Run API health checks against both HA nodes. |
+| `ha sync --once [--timeout 30m]` | Execute configured blob and metadata sync commands once and update HA state. |
+| `ha failover --from primary --to standby --fencing-confirmed` | Guide a safe manual failover, optionally run catch-up sync, print F5 steps, and write audit. |
 
 ### `share grant` flags
 
@@ -185,10 +196,129 @@ See `examples/config.example.yaml`. Key sections:
 - `repositories.managed` — generic repository desired state for any
   format/type. `settings` is passed through to the Nexus repository API body.
 - `blobStores.file` — desired file blob stores.
+- `ha` — optional warm-standby settings: node pair, replication commands,
+  state file, and manual failover safety gates.
 - `guestAccess` — target role, repository policies, forbidden/warn privileges.
 - `privilegeNaming` — prefix (`priv_guest`), separator, dash replacement.
 - `audit` — JSONL audit log path and masking.
 - `report` — report directory and format (`text` | `json`).
+
+## Warm-standby HA usage
+
+The HA mode follows the product constraint in
+`doc/nexus主从HA模式PRD.md`: Nexus Repository OSS has no native active-active or
+primary/standby replication. This CLI therefore implements an operator-guided
+warm standby workflow, not synchronous replication.
+
+### 1. Configure two nodes and sync commands
+
+Add an enabled `ha` section to `config.yaml`. Passwords are still read only from
+environment variables.
+
+```yaml
+ha:
+  enabled: true
+  role: "primary"
+  nodes:
+    - name: "primary"
+      role: "primary"
+      baseUrl: "http://nexus-a.example.com"
+      username: "admin"
+      passwordEnv: "NEXUS_PRIMARY_PASSWORD"
+    - name: "standby"
+      role: "standby"
+      baseUrl: "http://nexus-b.example.com"
+      username: "admin"
+      passwordEnv: "NEXUS_STANDBY_PASSWORD"
+  replication:
+    stateFile: "./logs/nexus-cli-ha-state.json"
+    blobSync:
+      method: "rsync"
+      schedule: "*/5 * * * *"
+      command: "rsync -a --delete nexus-a:/nexus-data/blobs/default/ nexus-b:/nexus-data/blobs/default/"
+    metadataSync:
+      method: "export-import"
+      schedule: "*/15 * * * *"
+      command: "/opt/nexus-ha/sync-metadata.sh"
+  failover:
+    mode: "manual"
+    requireFencing: true
+```
+
+`blobSync.command` and `metadataSync.command` are local operator-owned commands
+or scripts. They should be idempotent and return non-zero on failure. A typical
+metadata script wraps the Nexus Export database task, transfers the completed
+export package, then triggers Import database on the standby node.
+
+Export the node passwords before running HA commands:
+
+```sh
+export NEXUS_PRIMARY_PASSWORD='primary_admin_password'
+export NEXUS_STANDBY_PASSWORD='standby_admin_password'
+```
+
+### 2. Check both nodes
+
+```sh
+nexus-cli ha health --config config.yaml
+nexus-cli ha status --config config.yaml
+```
+
+`ha health` checks repository, privilege, and guest-role API access on both
+nodes. `ha status` also reads `ha.replication.stateFile` to show the last
+successful blob and metadata sync timestamps, lag, and last error.
+
+### 3. Run one catch-up sync
+
+```sh
+nexus-cli ha sync --once --config config.yaml --timeout 45m
+```
+
+The command runs `blobSync.command` first, then `metadataSync.command`. It stops
+after the first failure and writes the result to the HA state file. Empty sync
+commands fail fast with a message telling you which config field to fill.
+
+For scheduled replication, put the actual sync script in cron/systemd timer, or
+call `nexus-cli ha sync --once` from the scheduler after the commands are
+configured.
+
+### 4. Manual failover
+
+When the primary fails:
+
+```sh
+# First stop or isolate the old primary so there is no split-brain write path.
+# Then run:
+nexus-cli ha failover \
+  --config config.yaml \
+  --from primary \
+  --to standby \
+  --fencing-confirmed
+```
+
+By default `ha failover` runs a final catch-up sync before printing the F5
+switch checklist. If the old primary is hard down and sync cannot run, use
+`--skip-sync` only after accepting the RPO gap:
+
+```sh
+nexus-cli ha failover \
+  --config config.yaml \
+  --from primary \
+  --to standby \
+  --fencing-confirmed \
+  --skip-sync
+```
+
+After switching F5 so the standby is the only active pool member, verify:
+
+```sh
+nexus-cli ha status --config config.yaml
+nexus-cli guest check --config config.yaml
+```
+
+Every `ha sync --once` and `ha failover` attempt writes a JSONL audit record
+through the existing audit logger. The record never includes passwords or
+authorization headers.
 
 ### Policy precedence (per repository)
 
