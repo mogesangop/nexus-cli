@@ -13,24 +13,17 @@ type Privilege struct {
 
 // CreateRepositoryViewPrivilege creates a privilege of type
 // "repository-view" granting actions on a repository (format, name).
-// Endpoint: POST /security/privileges (PRD 20.2).
-//
-// NOTE: The exact request body field names ("repository", "format",
-// "actions") must match the target Nexus 3.76 Swagger. Verify before relying
-// on this in production.
+// Endpoint: POST /security/privileges/repository-view.
 func (c *Client) CreateRepositoryViewPrivilege(name, format, repo string, actions []string) (*Privilege, error) {
-	body := map[string]any{
-		"name":        name,
-		"description": "managed by nexus-cli",
-		"type":        "repository-view",
-		"properties": map[string]any{
-			"repository": repo,
-			"format":     format,
-			"actions":    joinActions(actions),
-		},
+	body := repositoryPrivilegeRequest{
+		Name:        name,
+		Description: "managed by nexus-cli",
+		Actions:     actions,
+		Format:      format,
+		Repository:  repo,
 	}
 	var out Privilege
-	if err := c.post("/security/privileges", body, &out); err != nil {
+	if err := c.post("/security/privileges/repository-view", body, &out); err != nil {
 		return nil, fmt.Errorf("create privilege %s: %w", name, err)
 	}
 	return &out, nil
@@ -39,25 +32,20 @@ func (c *Client) CreateRepositoryViewPrivilege(name, format, repo string, action
 // CreateRepositoryContentSelectorPrivilege creates a privilege of type
 // "repository-content-selector" granting actions on a repository (format, name)
 // scoped to the paths matched by a named content selector.
-// Endpoint: POST /security/privileges.
-//
-// NOTE: The property key "contentSelector" and its value shape (the selector
-// name) must match the target Nexus 3.76 Swagger. Verify before relying on
-// this in production.
+// Endpoint: POST /security/privileges/repository-content-selector.
 func (c *Client) CreateRepositoryContentSelectorPrivilege(name, format, repo, selector string, actions []string) (*Privilege, error) {
-	body := map[string]any{
-		"name":        name,
-		"description": "managed by nexus-cli",
-		"type":        "repository-content-selector",
-		"properties": map[string]any{
-			"repository":      repo,
-			"format":          format,
-			"contentSelector": selector,
-			"actions":         joinActions(actions),
+	body := repositoryContentSelectorPrivilegeRequest{
+		repositoryPrivilegeRequest: repositoryPrivilegeRequest{
+			Name:        name,
+			Description: "managed by nexus-cli",
+			Actions:     actions,
+			Format:      format,
+			Repository:  repo,
 		},
+		ContentSelector: selector,
 	}
 	var out Privilege
-	if err := c.post("/security/privileges", body, &out); err != nil {
+	if err := c.post("/security/privileges/repository-content-selector", body, &out); err != nil {
 		return nil, fmt.Errorf("create privilege %s: %w", name, err)
 	}
 	return &out, nil
@@ -84,15 +72,15 @@ func (c *Client) ListPrivileges() ([]Privilege, error) {
 	return out, nil
 }
 
-// joinActions renders a Nexus actions property value. Nexus expects a
-// comma-separated string for repository-view privilege actions.
-func joinActions(actions []string) string {
-	out := ""
-	for i, a := range actions {
-		if i > 0 {
-			out += ","
-		}
-		out += a
-	}
-	return out
+type repositoryPrivilegeRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Actions     []string `json:"actions"`
+	Format      string   `json:"format"`
+	Repository  string   `json:"repository"`
+}
+
+type repositoryContentSelectorPrivilegeRequest struct {
+	repositoryPrivilegeRequest
+	ContentSelector string `json:"contentSelector"`
 }
