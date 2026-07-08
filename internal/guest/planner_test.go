@@ -177,6 +177,24 @@ func TestBuild_RemovesUnwantedManaged(t *testing.T) {
 	}
 }
 
+func TestBuild_RemovesReadPrivilegeForProtectedRepo(t *testing.T) {
+	c := baseConfig()
+	p := NewPlanner(c)
+	readName := p.namer.PrivilegeName("raw", "security-prod-generic", []string{"read"})
+
+	plan := p.Build(repos(), []string{readName}, []string{readName})
+
+	if !containsString(plan.PrivilegesToRemove, readName) {
+		t.Fatalf("expected protected repo read privilege %s to be removed, got %v", readName, plan.PrivilegesToRemove)
+	}
+	if containsString(plan.PrivilegesToSkip, readName) {
+		t.Fatalf("protected repo read privilege should not be skipped, got %v", plan.PrivilegesToSkip)
+	}
+	if containsString(plan.DenyRepositories, "security-prod-generic") == false {
+		t.Fatalf("expected protected repo in deny list, got %v", plan.DenyRepositories)
+	}
+}
+
 func containsString(list []string, s string) bool {
 	for _, v := range list {
 		if v == s {

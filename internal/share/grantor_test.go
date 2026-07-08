@@ -107,17 +107,30 @@ func TestGrant_UserExists_Error(t *testing.T) {
 
 func TestGrant_FormatAutoDetect(t *testing.T) {
 	f := newFake()
-	f.repos = []nexus.Repository{{Name: "npm-hosted", Format: "npm", Type: "hosted"}}
+	f.repos = []nexus.Repository{{Name: "raw-hosted", Format: "raw", Type: "hosted"}}
 	g := NewGrantor()
 	res, err := g.Grant(f, Request{
-		Repo: "npm-hosted", Path: "/pkg/", UserID: "u",
+		Repo: "raw-hosted", Path: "/pkg/", UserID: "u",
 		Email: "u@x",
 	})
 	if err != nil {
 		t.Fatalf("Grant: %v", err)
 	}
-	if res.Format != "npm" {
-		t.Fatalf("format = %q, want npm", res.Format)
+	if res.Format != "raw" {
+		t.Fatalf("format = %q, want raw", res.Format)
+	}
+}
+
+func TestGrant_NonRawRejected(t *testing.T) {
+	f := newFake()
+	f.repos = []nexus.Repository{{Name: "npm-hosted", Format: "npm", Type: "hosted"}}
+	g := NewGrantor()
+	_, err := g.Grant(f, Request{
+		Repo: "npm-hosted", Path: "/pkg/", UserID: "u",
+		Email: "u@x",
+	})
+	if err == nil || !strings.Contains(err.Error(), "supports only raw") {
+		t.Fatalf("expected non-raw error, got %v", err)
 	}
 }
 
@@ -145,6 +158,31 @@ func TestGrant_DryRun(t *testing.T) {
 	}
 }
 
+func TestGrant_DryRunStillChecksIsolation(t *testing.T) {
+	f := newFake()
+	f.privileges["priv_repo_all"] = &nexus.Privilege{
+		Name: "priv_repo_all",
+		Type: "repository-view",
+		Properties: map[string]string{
+			"repository": "my-raw-repo",
+			"actions":    "read",
+		},
+	}
+	f.roles["role_other"] = &nexus.Role{ID: "role_other", Privileges: []string{"priv_repo_all"}}
+	f.users["mallory"] = &nexus.User{UserID: "mallory", Roles: []string{"role_other"}}
+
+	_, err := NewGrantor().Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/", UserID: "alice",
+		Email: "alice@x", DryRun: true,
+	})
+	if !errorsIs(err, ErrIsolationViolation) {
+		t.Fatalf("expected ErrIsolationViolation, got %v", err)
+	}
+	if got := len(f.selectors) + len(f.roles) + len(f.users); got != 2 {
+		t.Fatalf("dry-run should not create share resources, state count = %d", got)
+	}
+}
+
 func TestGrant_PathNormalization(t *testing.T) {
 	f := newFake()
 	g := NewGrantor()
@@ -165,6 +203,144 @@ func TestGrant_PathNormalization(t *testing.T) {
 	want := `path ^= "/foo/"`
 	if sel.Expression != want {
 		t.Fatalf("expression = %q, want %q", sel.Expression, want)
+	}
+}
+
+func TestGrant_SameRepoDifferentPathsUseDistinctPrivileges(t *testing.T) {
+	f := newFake()
+	g := NewGrantor()
+	if _, err := g.Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/", UserID: "alice",
+		Email: "alice@x",
+	}); err != nil {
+		t.Fatalf("first Grant: %v", err)
+	}
+	if _, err := g.Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-b/", UserID: "bob",
+		Email: "bob@x",
+	}); err != nil {
+		t.Fatalf("second Grant: %v", err)
+	}
+	if got := len(f.privileges); got != 2 {
+		t.Fatalf("privileges count = %d, want 2", got)
+	}
+}
+
+func TestGrant_BlocksRepositoryWideAccessByOtherUser(t *testing.T) {
+	f := newFake()
+	f.privileges["priv_repo_all"] = &nexus.Privilege{
+		Name: "priv_repo_all",
+		Type: "repository-view",
+		Properties: map[string]string{
+			"repository": "my-raw-repo",
+			"actions":    "browse,read",
+		},
+	}
+	f.roles["role_other"] = &nexus.Role{ID: "role_other", Privileges: []string{"priv_repo_all"}}
+	f.users["mallory"] = &nexus.User{UserID: "mallory", Roles: []string{"role_other"}}
+
+	_, err := NewGrantor().Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/", UserID: "alice",
+		Email: "alice@x",
+	})
+	if !errorsIs(err, ErrIsolationViolation) {
+		t.Fatalf("expected ErrIsolationViolation, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "repository-wide access") {
+		t.Fatalf("expected repository-wide issue, got %v", err)
+	}
+}
+
+func TestGrant_BlocksOverlappingSelector(t *testing.T) {
+	f := newFake()
+	f.selectors["sel_other"] = &nexus.ContentSelector{Name: "sel_other", Expression: `path ^= "/team-a/"`}
+	f.privileges["priv_other"] = &nexus.Privilege{
+		Name: "priv_other",
+		Type: "repository-content-selector",
+		Properties: map[string]string{
+			"repository":      "my-raw-repo",
+			"contentSelector": "sel_other",
+			"actions":         "read",
+		},
+	}
+	f.roles["role_other"] = &nexus.Role{ID: "role_other", Privileges: []string{"priv_other"}}
+	f.users["mallory"] = &nexus.User{UserID: "mallory", Roles: []string{"role_other"}}
+
+	_, err := NewGrantor().Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/sub/", UserID: "alice",
+		Email: "alice@x",
+	})
+	if !errorsIs(err, ErrIsolationViolation) {
+		t.Fatalf("expected ErrIsolationViolation, got %v", err)
+	}
+}
+
+func TestGrant_AllowsDisjointSelector(t *testing.T) {
+	f := newFake()
+	f.selectors["sel_other"] = &nexus.ContentSelector{Name: "sel_other", Expression: `path ^= "/team-b/"`}
+	f.privileges["priv_other"] = &nexus.Privilege{
+		Name: "priv_other",
+		Type: "repository-content-selector",
+		Properties: map[string]string{
+			"repository":      "my-raw-repo",
+			"contentSelector": "sel_other",
+			"actions":         "read",
+		},
+	}
+	f.roles["role_other"] = &nexus.Role{ID: "role_other", Privileges: []string{"priv_other"}}
+	f.users["mallory"] = &nexus.User{UserID: "mallory", Roles: []string{"role_other"}}
+
+	if _, err := NewGrantor().Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/", UserID: "alice",
+		Email: "alice@x",
+	}); err != nil {
+		t.Fatalf("Grant with disjoint selector: %v", err)
+	}
+}
+
+func TestGrant_AdminUserIsExempt(t *testing.T) {
+	f := newFake()
+	f.privileges["priv_repo_all"] = &nexus.Privilege{
+		Name: "priv_repo_all",
+		Type: "repository-view",
+		Properties: map[string]string{
+			"repository": "my-raw-repo",
+			"actions":    "browse,read",
+		},
+	}
+	f.roles["nx-admin"] = &nexus.Role{ID: "nx-admin", Privileges: []string{"priv_repo_all", "nx-all"}}
+	f.users["root"] = &nexus.User{UserID: "root", Roles: []string{"nx-admin"}}
+
+	if _, err := NewGrantor().Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/", UserID: "alice",
+		Email: "alice@x",
+	}); err != nil {
+		t.Fatalf("Grant with admin user present: %v", err)
+	}
+}
+
+func TestGrant_AnonymousAccessBlocksWithGuestProtectHint(t *testing.T) {
+	f := newFake()
+	f.privileges["priv_guest_raw_my_raw_repo_read"] = &nexus.Privilege{
+		Name: "priv_guest_raw_my_raw_repo_read",
+		Type: "repository-view",
+		Properties: map[string]string{
+			"repository": "my-raw-repo",
+			"actions":    "read",
+		},
+	}
+	f.roles["guest"] = &nexus.Role{ID: "guest", Privileges: []string{"priv_guest_raw_my_raw_repo_read"}}
+	f.users["anonymous"] = &nexus.User{UserID: "anonymous", Roles: []string{"guest"}}
+
+	_, err := NewGrantor().Grant(f, Request{
+		Repo: "my-raw-repo", Path: "/team-a/", UserID: "alice",
+		Email: "alice@x",
+	})
+	if !errorsIs(err, ErrIsolationViolation) {
+		t.Fatalf("expected ErrIsolationViolation, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "guest protect") {
+		t.Fatalf("expected guest protect hint, got %v", err)
 	}
 }
 
@@ -192,6 +368,14 @@ func newFake() *fakeAPI {
 
 func (f *fakeAPI) ListRepositories() ([]nexus.Repository, error) { return f.repos, nil }
 
+func (f *fakeAPI) ListContentSelectors() ([]nexus.ContentSelector, error) {
+	out := make([]nexus.ContentSelector, 0, len(f.selectors))
+	for _, s := range f.selectors {
+		out = append(out, *s)
+	}
+	return out, nil
+}
+
 func (f *fakeAPI) GetContentSelector(name string) (*nexus.ContentSelector, error) {
 	if s, ok := f.selectors[name]; ok {
 		return s, nil
@@ -212,10 +396,31 @@ func (f *fakeAPI) GetPrivilege(name string) (*nexus.Privilege, error) {
 	return nil, &nexus.APIError{Status: 404}
 }
 
+func (f *fakeAPI) ListPrivileges() ([]nexus.Privilege, error) {
+	out := make([]nexus.Privilege, 0, len(f.privileges))
+	for _, p := range f.privileges {
+		out = append(out, *p)
+	}
+	return out, nil
+}
+
 func (f *fakeAPI) CreateRepositoryContentSelectorPrivilege(name, format, repo, selector string, actions []string) (*nexus.Privilege, error) {
-	p := &nexus.Privilege{Name: name, Type: "repository-content-selector"}
+	p := &nexus.Privilege{Name: name, Type: "repository-content-selector", Properties: map[string]string{
+		"format":          format,
+		"repository":      repo,
+		"contentSelector": selector,
+		"actions":         strings.Join(actions, ","),
+	}}
 	f.privileges[name] = p
 	return p, nil
+}
+
+func (f *fakeAPI) ListRoles() ([]nexus.Role, error) {
+	out := make([]nexus.Role, 0, len(f.roles))
+	for _, r := range f.roles {
+		out = append(out, *r)
+	}
+	return out, nil
 }
 
 func (f *fakeAPI) GetRole(id string) (*nexus.Role, error) {
@@ -242,6 +447,14 @@ func (f *fakeAPI) GetUser(userID string) (*nexus.User, error) {
 		return u, nil
 	}
 	return nil, &nexus.APIError{Status: 404}
+}
+
+func (f *fakeAPI) ListUsers() ([]nexus.User, error) {
+	out := make([]nexus.User, 0, len(f.users))
+	for _, u := range f.users {
+		out = append(out, *u)
+	}
+	return out, nil
 }
 
 func (f *fakeAPI) CreateUser(u *nexus.User) (*nexus.User, error) {

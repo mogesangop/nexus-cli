@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -87,9 +88,49 @@ func (l *Logger) Write(r Record) error {
 	return nil
 }
 
-// mask is a placeholder for sensitive-field redaction. By design the Record
-// type never carries secrets; this hook exists so future fields can be
-// scrubbed without changing call sites. Currently a pass-through.
+var (
+	authorizationPattern = regexp.MustCompile(`(?i)authorization\s*[:=]\s*(basic|bearer)?\s*[^,\s;}]+`)
+	jsonPasswordPattern  = regexp.MustCompile(`(?i)("(?:newPassword|password|passwd|pwd)"\s*:\s*)("[^"]*"|[^,\s}]+)`)
+	textPasswordPattern  = regexp.MustCompile(`(?i)\b(newPassword|password|passwd|pwd)\s*[=:]\s*("[^"]*"|[^,\s;}]*)`)
+)
+
+// mask redacts defensive sensitive fragments from all free-form audit fields.
+// Records are intentionally structured so secrets should never be supplied, but
+// this protects error messages returned by external systems.
 func mask(r Record) Record {
+	r.ErrorMessage = scrubSensitive(r.ErrorMessage)
+	r.TargetRole = scrubSensitive(r.TargetRole)
+	r.TargetUser = scrubSensitive(r.TargetUser)
+	r.TargetPath = scrubSensitive(r.TargetPath)
+	r.TargetRepo = scrubSensitive(r.TargetRepo)
+	r.TargetBlobStore = scrubSensitive(r.TargetBlobStore)
+	r.CreatedPrivileges = scrubSensitiveSlice(r.CreatedPrivileges)
+	r.UpdatedRoles = scrubSensitiveSlice(r.UpdatedRoles)
+	r.RemovedPrivileges = scrubSensitiveSlice(r.RemovedPrivileges)
+	r.CreatedSelectors = scrubSensitiveSlice(r.CreatedSelectors)
+	r.CreatedUsers = scrubSensitiveSlice(r.CreatedUsers)
+	r.IncludePaths = scrubSensitiveSlice(r.IncludePaths)
+	r.ExcludePaths = scrubSensitiveSlice(r.ExcludePaths)
 	return r
+}
+
+func scrubSensitive(s string) string {
+	if s == "" {
+		return s
+	}
+	s = authorizationPattern.ReplaceAllString(s, "auth=[REDACTED]")
+	s = jsonPasswordPattern.ReplaceAllString(s, `${1}"[REDACTED]"`)
+	s = textPasswordPattern.ReplaceAllString(s, `${1}=[REDACTED]`)
+	return s
+}
+
+func scrubSensitiveSlice(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	out := make([]string, len(values))
+	for i, value := range values {
+		out[i] = scrubSensitive(value)
+	}
+	return out
 }

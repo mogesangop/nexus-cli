@@ -81,10 +81,14 @@ func (c *Checker) Check(client *nexus.Client) (*report.CheckReport, error) {
 		pol := c.plan.PolicyFor(r.Name)
 		switch pol {
 		case PolicyDeny:
-			// ensure no managed privilege grants access
-			name := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyReadOnly))
-			if _, ok := privSet[name]; ok {
-				out.Fails = append(out.Fails, fmt.Sprintf("%s is denied but has read privilege", r.Name))
+			readName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyReadOnly))
+			browseReadName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyBrowseRead))
+			if _, ok := privSet[readName]; ok {
+				out.Fails = append(out.Fails, fmt.Sprintf("%s is protected/denied but has read privilege", r.Name))
+			} else if _, ok := privSet[browseReadName]; ok {
+				out.Fails = append(out.Fails, fmt.Sprintf("%s is protected/denied but has browse+read privilege", r.Name))
+			} else {
+				out.Passes = append(out.Passes, fmt.Sprintf("%s is protected/denied for guest", r.Name))
 			}
 		case PolicyReadOnly:
 			readName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyReadOnly))

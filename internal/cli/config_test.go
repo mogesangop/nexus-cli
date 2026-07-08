@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,8 +17,26 @@ func TestConfigInit_CreatesDirAndWritesDefault(t *testing.T) {
 
 	cmd := newConfigInitCmd()
 	cmd.SetArgs([]string{})
+	readOut, writeOut, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stdout: %v", err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = writeOut
+	defer func() { os.Stdout = oldStdout }()
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
+	}
+	if err := writeOut.Close(); err != nil {
+		t.Fatalf("close stdout pipe: %v", err)
+	}
+	os.Stdout = oldStdout
+	out, err := io.ReadAll(readOut)
+	if err != nil {
+		t.Fatalf("read stdout pipe: %v", err)
+	}
+	if !strings.Contains(string(out), "before running guest protect") {
+		t.Fatalf("config init output should mention guest protect, got %q", string(out))
 	}
 
 	path := filepath.Join(tmpHome, ".nexus-cli", "config.yaml")

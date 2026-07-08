@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// SyncReport summarizes a guest sync (dry-run or applied).
+// SyncReport summarizes a guest protection run (dry-run or applied).
 type SyncReport struct {
 	DryRun                 bool
 	TargetRole             string
@@ -36,19 +36,19 @@ type CheckReport struct {
 	Fails      []string
 }
 
-// PrintSync writes a sync report to stdout in the human-readable format from
+// PrintSync writes a protection report to stdout in the human-readable format from
 // PRD 8.4/8.5.
 func PrintSync(r *SyncReport) {
 	if r.DryRun {
-		fmt.Println("Guest Access Sync Plan (dry-run)")
+		fmt.Println("Guest Access Protection Plan (dry-run)")
 	} else {
-		fmt.Println("Guest Access Sync Completed")
+		fmt.Println("Guest Access Protection Completed")
 	}
 	fmt.Println("Target Role:")
 	fmt.Printf("  %s\n", r.TargetRole)
 	printList("Browse + Read Repositories", r.BrowseReadRepositories)
 	printList("Read Only Repositories", r.ReadOnlyRepositories)
-	printList("Deny Repositories", r.DenyRepositories)
+	printList("Protected / Denied Repositories", r.DenyRepositories)
 	printList("Privileges To Create", r.PrivilegesToCreate)
 	printList("Skipped Privileges", r.PrivilegesToSkip)
 	printList("Privileges To Remove", r.PrivilegesToRemove)
@@ -79,7 +79,7 @@ func PrintCheck(r *CheckReport) {
 	printList("FAIL", r.Fails)
 	if len(r.Fails) > 0 {
 		fmt.Println("Suggestion:")
-		fmt.Println("  Run: nexus-cli guest sync --config config.yaml --dry-run")
+		fmt.Println("  Run: nexus-cli guest protect --config config.yaml --dry-run")
 	}
 }
 
@@ -113,14 +113,14 @@ func WriteFileSync(dir, name string, format string, r *SyncReport) error {
 func syncReportText(r *SyncReport) string {
 	var b strings.Builder
 	if r.DryRun {
-		b.WriteString("Guest Access Sync Plan (dry-run)\n")
+		b.WriteString("Guest Access Protection Plan (dry-run)\n")
 	} else {
-		b.WriteString("Guest Access Sync Completed\n")
+		b.WriteString("Guest Access Protection Completed\n")
 	}
 	b.WriteString("Target Role:\n  " + r.TargetRole + "\n")
 	writeList(&b, "Browse + Read Repositories", r.BrowseReadRepositories)
 	writeList(&b, "Read Only Repositories", r.ReadOnlyRepositories)
-	writeList(&b, "Deny Repositories", r.DenyRepositories)
+	writeList(&b, "Protected / Denied Repositories", r.DenyRepositories)
 	writeList(&b, "Privileges To Create", r.PrivilegesToCreate)
 	writeList(&b, "Skipped Privileges", r.PrivilegesToSkip)
 	writeList(&b, "Privileges To Remove", r.PrivilegesToRemove)

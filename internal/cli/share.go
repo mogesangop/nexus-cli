@@ -15,7 +15,7 @@ import (
 func NewShareCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "share",
-		Short: "Grant a named user browse+download access to a repository directory",
+		Short: "Grant a named user exclusive browse+download access to a raw repository directory",
 	}
 	cmd.AddCommand(newShareGrantCmd())
 	return cmd
@@ -29,47 +29,63 @@ func newShareGrantCmd() *cobra.Command {
 		first, last    string
 		email          string
 		format         string
+		output         string
 		passwordLength int
-		dryRun         bool
+		dryRun, yes    bool
 	)
 	c := &cobra.Command{
 		Use:   "grant",
 		Short: "Create a path-scoped browse+read grant for a user (one-shot, idempotent)",
 		Long: "Creates a content selector, a repository-content-selector privilege, a " +
 			"role, and a user, wiring them together so the user can browse and download " +
-			"under the given path in the repository. The password is generated and printed " +
+			"under the given path in a raw repository. Before creating anything, it checks " +
+			"existing non-admin users and fails if another user or anonymous already has " +
+			"repo-wide or overlapping path access. The password is generated and printed " +
 			"once to stdout. Idempotent: existing selector/privilege/role are reused; an " +
 			"existing user is an error (the password is never reset). Partial progress is " +
 			"NOT rolled back — re-running is safe.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig(cfgPath)
-			if err != nil {
-				return err
-			}
-			client, err := newClient(cfg)
-			if err != nil {
-				return err
-			}
+			return runWithJSONErrors(cmd, output, "share grant", func() error {
+				if err := validateWriteOutput(output, dryRun); err != nil {
+					return err
+				}
+				if err := requireWriteConfirmation("share grant", dryRun, yes); err != nil {
+					return err
+				}
+				cfg, err := loadConfig(cfgPath)
+				if err != nil {
+					return err
+				}
+				client, err := newClient(cfg)
+				if err != nil {
+					return err
+				}
 
-			req := share.Request{
-				Repo:           repo,
-				Path:           path,
-				UserID:         userID,
-				FirstName:      first,
-				LastName:       last,
-				Email:          email,
-				Format:         format,
-				PasswordLength: passwordLength,
-				DryRun:         dryRun,
-			}
-			res, err := share.NewGrantor().Grant(client, req)
-			if err != nil {
-				writeShareAudit(cfg, "share grant", dryRun, "failed", res, err)
-				return err
-			}
-			writeShareAudit(cfg, "share grant", dryRun, "success", res, nil)
-			printShareResult(res, dryRun)
-			return nil
+				req := share.Request{
+					Repo:           repo,
+					Path:           path,
+					UserID:         userID,
+					FirstName:      first,
+					LastName:       last,
+					Email:          email,
+					Format:         format,
+					PasswordLength: passwordLength,
+					DryRun:         dryRun,
+				}
+				res, err := share.NewGrantor().Grant(client, req)
+				if err != nil {
+					writeShareAudit(cfg, "share grant", dryRun, "failed", res, err)
+					return err
+				}
+				writeShareAudit(cfg, "share grant", dryRun, "success", res, nil)
+				if dryRun && isJSONOutput(output) {
+					return writeDryRunResponse(cmd, "share grant", map[string]any{
+						"share": res,
+					}, shareGrantChanges(res), nil)
+				}
+				printShareResult(res, dryRun)
+				return nil
+			})
 		},
 	}
 	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
@@ -82,6 +98,8 @@ func newShareGrantCmd() *cobra.Command {
 	c.Flags().StringVar(&format, "format", "", "repository format (auto-detected if omitted)")
 	c.Flags().IntVar(&passwordLength, "password-length", 24, "generated password length")
 	c.Flags().BoolVar(&dryRun, "dry-run", false, "compute and print the plan without applying changes")
+	c.Flags().BoolVar(&yes, "yes", false, "confirm creating share access resources")
+	addOutputFlag(c, &output)
 	_ = c.MarkFlagRequired("repo")
 	_ = c.MarkFlagRequired("path")
 	_ = c.MarkFlagRequired("user")
@@ -115,6 +133,18 @@ func createdOrReuse(created, dryRun bool) string {
 	return "reused"
 }
 
+func shareGrantChanges(res *share.Result) []responseChange {
+	if res == nil {
+		return []responseChange{}
+	}
+	return []responseChange{
+		{ResourceType: "contentSelector", Name: res.Selector, Action: "create"},
+		{ResourceType: "privilege", Name: res.Privilege, Action: "create"},
+		{ResourceType: "role", Name: res.Role, Action: "create"},
+		{ResourceType: "user", Name: res.User, Action: "create"},
+	}
+}
+
 // writeShareAudit emits one JSONL audit record for a share grant. The password
 // is never recorded (audit invariant #3). Audit write failures are non-fatal.
 func writeShareAudit(cfg *config.Config, command string, dryRun bool, result string, res *share.Result, runErr error) {
@@ -133,16 +163,16 @@ func writeShareAudit(cfg *config.Config, command string, dryRun bool, result str
 		rec.TargetPath = res.Path
 		rec.TargetUser = res.User
 		rec.TargetRole = res.Role
-		if res.SelectorCreated {
+		if res.SelectorCreated || dryRun {
 			rec.CreatedSelectors = append(rec.CreatedSelectors, res.Selector)
 		}
-		if res.PrivilegeCreated {
+		if res.PrivilegeCreated || dryRun {
 			rec.CreatedPrivileges = append(rec.CreatedPrivileges, res.Privilege)
 		}
-		if res.RoleCreated {
+		if res.RoleCreated || dryRun {
 			rec.UpdatedRoles = append(rec.UpdatedRoles, res.Role)
 		}
-		if res.UserCreated {
+		if res.UserCreated || dryRun {
 			rec.CreatedUsers = append(rec.CreatedUsers, res.User)
 		}
 	}

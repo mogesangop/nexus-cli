@@ -22,6 +22,16 @@ func (c *Client) GetRole(id string) (*Role, error) {
 	return &out, nil
 }
 
+// ListRoles returns all Nexus security roles.
+// Endpoint: GET /security/roles.
+func (c *Client) ListRoles() ([]Role, error) {
+	var out []Role
+	if err := c.get("/security/roles", &out); err != nil {
+		return nil, fmt.Errorf("list roles: %w", err)
+	}
+	return out, nil
+}
+
 // CreateRole creates a new role. Endpoint: POST /security/roles (PRD 20.2).
 func (c *Client) CreateRole(r *Role) (*Role, error) {
 	body := map[string]any{

@@ -51,8 +51,11 @@ func TestDefaultIncludesDevopsRawRepository(t *testing.T) {
 	if len(c.BlobStores.File) != 1 || c.BlobStores.File[0].Name != "default" {
 		t.Fatalf("file blob stores = %#v, want default", c.BlobStores.File)
 	}
-	if got := c.GuestAccess.ReadOnly.Repositories; len(got) != 1 || got[0] != "REPLACE_WITH_READ_ONLY_REPO" {
-		t.Fatalf("readOnly repositories = %#v, want placeholder", got)
+	if got := c.GuestAccess.ReadOnly.Repositories; len(got) != 0 {
+		t.Fatalf("readOnly repositories = %#v, want empty", got)
+	}
+	if got := c.GuestAccess.Deny.Repositories; len(got) != 1 || got[0] != "devops-prod-generic" {
+		t.Fatalf("deny repositories = %#v, want devops-prod-generic", got)
 	}
 }
 

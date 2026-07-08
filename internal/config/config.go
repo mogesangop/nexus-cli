@@ -289,13 +289,13 @@ func Default() *Config {
 			DefaultPolicy:   "browseRead",
 			BrowseRead: BrowseReadRule{
 				IncludeRepositories: []string{"*"},
-				ExcludeRepositories: []string{"REPLACE_WITH_READ_ONLY_REPO"},
+				ExcludeRepositories: []string{"devops-prod-generic"},
 			},
 			ReadOnly: NameList{
-				Repositories: []string{"REPLACE_WITH_READ_ONLY_REPO"},
+				Repositories: []string{},
 			},
 			Deny: NameList{
-				Repositories: []string{},
+				Repositories: []string{"devops-prod-generic"},
 			},
 			Actions: ActionsConfig{
 				BrowseRead: []string{"browse", "read"},

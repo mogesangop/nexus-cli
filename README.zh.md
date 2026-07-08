@@ -7,15 +7,17 @@
 
 一个用于治理 **Nexus Repository 3.76** 访客 / 匿名访问的命令行工具。
 
-第一版本解决一个问题：访客（匿名用户）在 Nexus UI 中能看到过多仓库与制品。Nexus 不支持「给所有仓库授予 browse，但排除某一个」的权限模型，因此 `nexus-cli` 会读取仓库列表，为每个仓库构建 `repository-view` 权限并绑定到访客角色 —— 对公开仓库授予 `browse+read`，对需要隐藏的仓库只授予 `read`（UI 不可见，但仍可通过精确 URL 下载）。
+第一版本解决一个问题：访客（匿名用户）在 Nexus UI 中能看到过多仓库与制品。Nexus 不支持「给所有仓库授予 browse，但排除某一个」的权限模型，因此 `nexus-cli` 会读取仓库列表，为每个仓库构建 `repository-view` 权限并绑定到访客角色 —— 对公开仓库授予 `browse+read`，对受保护仓库不授予任何访客权限，使其不可见且不可通过直链下载。旧的 `readOnly` 策略仍保留，用于“UI 不可见但精确 URL 可下载”的高级场景。
 
 完整产品规格见 `doc/nexus-cli第一版本PRD.md`。
 
-第二个用例是**按用户路径范围分享**：`share grant` 会创建内容选择器、路径范围的 `browse+read` 权限、角色和用户，让指定用户只能浏览/下载某一个仓库某一个目录下的制品，其它内容对其完全不可见。分享类资源使用独立的 `priv_share_` 前缀和 `role_share_*` 角色，与访客子系统互不可见、互不影响。
+第二个用例是**按用户路径范围分享**：`share grant` 会创建内容选择器、路径范围的 `browse+read` 权限、角色和用户，让指定用户只能浏览/下载某一个 raw 仓库某一个目录下的制品。创建前会检查现有非 admin 用户，若其他用户已经拥有该仓库级或重叠目录访问权限，则拒绝继续，避免产生“看似独占但实际不隔离”的授权。分享类资源使用独立的 `priv_share_` 前缀和 `role_share_*` 角色，与访客子系统互不可见、互不影响。
 
 第三个用例是管理 `raw/hosted` 仓库及 Community/OSS 环境下的制品生命周期。CLI 可以幂等创建或安全更新仓库，并按文件最后修改时间与路径规则预览、删除过期制品。完整规格见 `doc/raw仓库与制品生命周期PRD.md`。
 
 第四个用例是支撑 **Nexus OSS 主从温备 HA 运维**：两台独立 Nexus 节点、F5 单活入口、定时复制 blob / 元数据、人工 fencing 与引导式故障切换。CLI 不自动调用 F5，也不承诺零 RPO；它提供双节点健康/状态、一次性同步命令执行、fencing 门禁和审计记录。完整规格见 `doc/nexus主从HA模式PRD.md`。
+
+AI Agent 调用 `nexus-cli` 时，请先阅读 `doc/AI可调用能力清单.md` 和 `doc/AI调用指南.md`，按“读取状态 → dry-run / preview → 人工确认 → 执行 → 审计检查”的顺序操作。
 
 ## 安装
 
@@ -92,8 +94,8 @@ CGO_ENABLED=0 go build -o nexus-cli ./cmd/nexus-cli
 #    （目录不存在则按 0700 权限创建）。
 ./nexus-cli config init
 
-# 2. 编辑配置：设置 baseUrl、roleName，以及 readOnly / browseRead
-#    仓库列表。然后导出管理员密码：
+# 2. 编辑配置：设置 baseUrl、roleName，以及 deny / browseRead
+#    仓库列表。受保护仓库放入 deny.repositories。然后导出管理员密码：
 export NEXUS_ADMIN_PASSWORD='your_password'
 
 # 3. 验证连通性。--config 可省略；未指定时按以下顺序搜索首个存在的文件：
@@ -101,10 +103,10 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ./nexus-cli health check
 
 # 4. 预览执行计划（不修改 Nexus）。
-./nexus-cli guest sync --dry-run
+./nexus-cli guest protect --dry-run
 
-# 5. 执行同步。
-./nexus-cli guest sync
+# 5. 执行保护。
+./nexus-cli guest protect
 
 # 6. 校验漂移。
 ./nexus-cli guest check
@@ -131,7 +133,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
   --first-name Alice --last-name Team
 ```
 
-该授权是幂等的：使用相同参数重复执行会复用已存在的 selector、privilege 和 role。若用户已存在则**报错**——绝不重置已有用户密码。失败时不回滚已完成的步骤，因此可安全重试。
+该授权是幂等的：使用相同参数重复执行会复用已存在的 selector、privilege 和 role。若用户已存在则**报错**——绝不重置已有用户密码。`share grant` 仅支持 raw 仓库，并会在创建任何资源前检查是否存在其他非 admin 用户的冲突访问。失败时不回滚已完成的步骤，因此可安全重试。
 
 ## 命令
 
@@ -144,19 +146,20 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | `config init [--output config.yaml]` | 生成配置模板（默认：`~/.nexus-cli/config.yaml`）。 |
 | `repo list [--format F] [--type T]` | 列出仓库，可按 format/type 筛选。 |
 | `repo get --name R --format F --type T` | 查看单个仓库的完整 API 配置。 |
-| `repo apply [--dry-run]` | 应用 `repositories.managed` 中声明的通用仓库。 |
-| `repo ensure --name R --format F --type T --settings FILE [--dry-run]` | 从 YAML/JSON settings 创建或更新单个通用仓库。 |
-| `repo raw apply [--dry-run]` | 应用配置中声明的 raw hosted 仓库。 |
-| `repo raw ensure --name R --blob-store B [...]` | 创建或安全更新单个 raw hosted 仓库。 |
+| `repo apply [--dry-run] [--yes]` | 应用 `repositories.managed` 中声明的通用仓库；真实变更必须带 `--yes`。 |
+| `repo ensure --name R --format F --type T --settings FILE [--dry-run] [--yes]` | 从 YAML/JSON settings 创建或更新单个通用仓库；真实变更必须带 `--yes`。 |
+| `repo raw apply [--dry-run] [--yes]` | 应用配置中声明的 raw hosted 仓库；真实变更必须带 `--yes`。 |
+| `repo raw ensure --name R --blob-store B [...] [--dry-run] [--yes]` | 创建或安全更新单个 raw hosted 仓库；真实变更必须带 `--yes`。 |
 | `repo lifecycle preview --repo R [...]` | 只读预览过期 raw 制品。 |
 | `repo lifecycle run --repo R --yes [...]` | 删除过期 raw 制品。 |
 | `blobstore list` | 列出 Blob Store。 |
 | `blobstore get --name B --type file` | 查看单个 file Blob Store。 |
-| `blobstore apply [--dry-run]` | 应用 `blobStores.file` 中声明的 file Blob Store。 |
-| `blobstore ensure --name B --path P [...]` | 创建或更新单个 file Blob Store。 |
-| `guest sync [--dry-run] [--report FILE]` | 按配置同步访客角色权限。 |
+| `blobstore apply [--dry-run] [--yes]` | 应用 `blobStores.file` 中声明的 file Blob Store；真实变更必须带 `--yes`。 |
+| `blobstore ensure --name B --path P [...] [--dry-run] [--yes]` | 创建或更新单个 file Blob Store；真实变更必须带 `--yes`。 |
+| `guest protect [--dry-run] [--yes] [--report FILE]` | 按配置保护访客访问权限；真实变更必须带 `--yes`。 |
+| `guest sync [--dry-run] [--yes] [--report FILE]` | `guest protect` 的兼容别名，已不推荐；真实变更必须带 `--yes`。 |
 | `guest check` | 只读校验访客角色是否符合配置。 |
-| `share grant --repo R --path /p/ --user U --email E` | 为指定用户创建路径范围的 browse+read 授权。 |
+| `share grant --repo R --path /p/ --user U --email E [--dry-run] [--yes]` | 为指定用户创建路径范围的 browse+read 授权；真实变更必须带 `--yes`。 |
 | `health check` | 连接 / API / 认证健康检查。 |
 | `ha status` | 查看双节点健康、blob / 元数据最后同步时间与延迟。 |
 | `ha health` | 对两个 HA 节点分别执行 API 健康检查。 |
@@ -296,12 +299,12 @@ deny > readOnly > browseRead > defaultPolicy
 
 命中 `deny.repositories` 的仓库不授予任何权限；命中 `readOnly` 的只授予 `read`（UI 不可见，仍可下载）；匹配 `browseRead` 且未被排除的授予 `browse+read`；其余由 `defaultPolicy` 决定。
 
-### 设置受保护仓库：UI 不可见，但可直链下载
+### 设置受保护仓库：UI 不可见，且不可直链下载
 
-所谓“受保护仓库”就是给匿名访客保留 `read`，但不授予 `browse`。Nexus UI 的仓库列表和目录浏览依赖 `browse`；精确 URL 下载依赖 `read`。因此配置时要做两件事：
+所谓“受保护仓库”就是不向匿名访客授予任何 `browse` 或 `read`。Nexus UI 的仓库列表和目录浏览依赖 `browse`；精确 URL 下载依赖 `read`。因此配置时要做两件事：
 
 1. 从 `browseRead.excludeRepositories` 排除该仓库，避免授予 `browse+read`。
-2. 加入 `readOnly.repositories`，只授予 `read`。
+2. 加入 `deny.repositories`，不授予任何访客权限。
 
 例如要保护 `devops-prod-generic`：
 
@@ -317,10 +320,10 @@ guestAccess:
     excludeRepositories:
       - "devops-prod-generic"
   readOnly:
+    repositories: []
+  deny:
     repositories:
       - "devops-prod-generic"
-  deny:
-    repositories: []
   actions:
     browseRead:
       - browse
@@ -333,8 +336,8 @@ guestAccess:
 
 ```sh
 export NEXUS_ADMIN_PASSWORD='your_password'
-./nexus-cli guest sync --config config.yaml --dry-run
-./nexus-cli guest sync --config config.yaml
+./nexus-cli guest protect --config config.yaml --dry-run
+./nexus-cli guest protect --config config.yaml --yes
 ./nexus-cli guest check --config config.yaml
 ```
 
@@ -343,13 +346,12 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ```sh
 # 1. 用匿名 / 未登录浏览器打开 Nexus UI，仓库列表中不应看到 devops-prod-generic。
 
-# 2. 用精确制品 URL 仍应能下载。路径必须是真实存在的制品路径。
+# 2. 匿名 / 未登录用户访问精确制品 URL 也应失败。
 curl -fL \
-  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar' \
-  -o /tmp/artifact.tar
+  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar'
 ```
 
-如果直链也无法下载，先检查该仓库是否误放进了 `deny.repositories`，再检查匿名用户是否绑定了 `role_guest_repository_access`。如果 UI 仍能看到该仓库，通常是匿名用户还有其它角色或权限包含了该仓库的 `browse`；`guest sync` 会移除 `forbiddenPrivileges` 中列出的宽泛 browse 权限，但不会删除所有非托管角色。
+如果直链仍可下载或 UI 仍能看到该仓库，通常是匿名用户还有其它角色或权限包含了该仓库访问能力；`guest protect` 会移除 `forbiddenPrivileges` 中列出的宽泛 browse/admin 权限，但不会删除所有非托管角色。
 
 ### 权限命名
 
@@ -358,11 +360,11 @@ curl -fL \
 
 ### 托管权限
 
-`nexus-cli` 只管理名称以 `priv_guest_` 开头的权限。角色上**非托管**的权限会被保留 —— **例外**是 `forbiddenPrivileges` 中列出的（如 `nx-all`、`nx-admin`、`nx-repository-view-*-*-browse`），它们在 `sync` 时无论是否托管都会从访客角色移除。`warnPrivileges`（如 `nx-search-read`）在 `guest check` 中告警，但默认不移除。
+`nexus-cli` 只管理名称以 `priv_guest_` 开头的权限。角色上**非托管**的权限会被保留 —— **例外**是 `forbiddenPrivileges` 中列出的（如 `nx-all`、`nx-admin`、`nx-repository-view-*-*-browse`），它们在 `protect` 时无论是否托管都会从访客角色移除。`warnPrivileges`（如 `nx-search-read`）在 `guest check` 中告警，但默认不移除。
 
 ## 幂等性
 
-`guest sync` 是幂等的（PRD §14）：状态未变时第二次执行不会创建也不会移除任何内容。已存在且符合配置的托管权限会被跳过；陈旧的托管权限会被移除。
+`guest protect` 是幂等的（PRD §14）：状态未变时第二次执行不会创建也不会移除任何内容。已存在且符合配置的托管权限会被跳过；陈旧的托管权限会被移除。`guest sync` 保留为兼容别名，但已不推荐。
 
 `repo raw apply` 同样幂等。它不会迁移 blob store，也不会删除重建同名仓库。建议先执行：
 

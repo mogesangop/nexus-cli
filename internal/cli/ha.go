@@ -29,80 +29,118 @@ func NewHACmd() *cobra.Command {
 }
 
 func newHAStatusCmd() *cobra.Command {
-	var cfgPath string
+	var cfgPath, output string
 	c := &cobra.Command{
 		Use:   "status",
 		Short: "Show both node health and replication lag",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig(cfgPath)
-			if err != nil {
-				return err
-			}
-			if err := requireHA(cfg); err != nil {
-				return err
-			}
-			state, err := haops.LoadState(cfg.HA.Replication.StateFile)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("HA status: enabled=%t localRole=%s mode=%s requireFencing=%t\n",
-				cfg.HA.Enabled, cfg.HA.Role, cfg.HA.Failover.Mode, cfg.HA.Failover.RequireFencing)
-			fmt.Println("Nodes:")
-			failed := printNodeHealth(cfg, false)
-			fmt.Printf("Replication state: %s\n", cfg.HA.Replication.StateFile)
-			now := time.Now()
-			for _, name := range []string{"blob", "metadata"} {
-				job := state.Jobs[name]
-				lag, ok := haops.Lag(job.LastSuccessAt, now)
-				lagText := "unknown"
-				if ok {
-					lagText = lag.Round(time.Second).String()
+			return runWithJSONErrors(cmd, output, "ha status", func() error {
+				if err := validateOutput(output); err != nil {
+					return err
 				}
-				status := "OK"
-				if job.LastSuccessAt == "" {
-					status = "UNKNOWN"
+				cfg, err := loadConfig(cfgPath)
+				if err != nil {
+					return err
 				}
-				if job.LastError != "" {
-					status = "ERROR"
+				if err := requireHA(cfg); err != nil {
+					return err
 				}
-				fmt.Printf("  %-8s %-7s method=%s schedule=%q lastSuccess=%s lag=%s\n",
-					name, status, fallback(job.Method, "-"), job.Schedule, fallback(job.LastSuccessAt, "-"), lagText)
-				if job.LastError != "" {
-					fmt.Printf("           lastErrorAt=%s error=%s\n", fallback(job.LastErrorAt, "-"), job.LastError)
+				state, err := haops.LoadState(cfg.HA.Replication.StateFile)
+				if err != nil {
+					return err
 				}
-			}
-			if failed > 0 {
-				return fmt.Errorf("%d HA node health check(s) failed", failed)
-			}
-			return nil
+				if isJSONOutput(output) {
+					nodes, warnings, failed, firstErr := collectHANodeHealth(cfg)
+					jobs := haJobStatuses(state, cfg, time.Now())
+					if failed > 0 {
+						return firstErr
+					}
+					return writeReadOnlyResponse(cmd, "ha status", "success", map[string]any{
+						"enabled":          cfg.HA.Enabled,
+						"localRole":        cfg.HA.Role,
+						"mode":             cfg.HA.Failover.Mode,
+						"requireFencing":   cfg.HA.Failover.RequireFencing,
+						"nodes":            nodes,
+						"replicationState": cfg.HA.Replication.StateFile,
+						"jobs":             jobs,
+					}, warnings)
+				}
+				fmt.Printf("HA status: enabled=%t localRole=%s mode=%s requireFencing=%t\n",
+					cfg.HA.Enabled, cfg.HA.Role, cfg.HA.Failover.Mode, cfg.HA.Failover.RequireFencing)
+				fmt.Println("Nodes:")
+				failed := printNodeHealth(cfg, false)
+				fmt.Printf("Replication state: %s\n", cfg.HA.Replication.StateFile)
+				now := time.Now()
+				for _, name := range []string{"blob", "metadata"} {
+					job := state.Jobs[name]
+					lag, ok := haops.Lag(job.LastSuccessAt, now)
+					lagText := "unknown"
+					if ok {
+						lagText = lag.Round(time.Second).String()
+					}
+					status := "OK"
+					if job.LastSuccessAt == "" {
+						status = "UNKNOWN"
+					}
+					if job.LastError != "" {
+						status = "ERROR"
+					}
+					fmt.Printf("  %-8s %-7s method=%s schedule=%q lastSuccess=%s lag=%s\n",
+						name, status, fallback(job.Method, "-"), job.Schedule, fallback(job.LastSuccessAt, "-"), lagText)
+					if job.LastError != "" {
+						fmt.Printf("           lastErrorAt=%s error=%s\n", fallback(job.LastErrorAt, "-"), job.LastError)
+					}
+				}
+				if failed > 0 {
+					return fmt.Errorf("%d HA node health check(s) failed", failed)
+				}
+				return nil
+			})
 		},
 	}
 	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
+	addOutputFlag(c, &output)
 	return c
 }
 
 func newHAHealthCmd() *cobra.Command {
-	var cfgPath string
+	var cfgPath, output string
 	c := &cobra.Command{
 		Use:   "health",
 		Short: "Run API health checks against both HA nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig(cfgPath)
-			if err != nil {
-				return err
-			}
-			if err := requireHA(cfg); err != nil {
-				return err
-			}
-			failed := printNodeHealth(cfg, true)
-			if failed > 0 {
-				return fmt.Errorf("%d HA node health check(s) failed", failed)
-			}
-			fmt.Println("All HA node checks passed.")
-			return nil
+			return runWithJSONErrors(cmd, output, "ha health", func() error {
+				if err := validateOutput(output); err != nil {
+					return err
+				}
+				cfg, err := loadConfig(cfgPath)
+				if err != nil {
+					return err
+				}
+				if err := requireHA(cfg); err != nil {
+					return err
+				}
+				if isJSONOutput(output) {
+					nodes, warnings, failed, firstErr := collectHANodeHealth(cfg)
+					if failed > 0 {
+						return firstErr
+					}
+					return writeReadOnlyResponse(cmd, "ha health", "success", map[string]any{
+						"nodes":  nodes,
+						"failed": failed,
+					}, warnings)
+				}
+				failed := printNodeHealth(cfg, true)
+				if failed > 0 {
+					return fmt.Errorf("%d HA node health check(s) failed", failed)
+				}
+				fmt.Println("All HA node checks passed.")
+				return nil
+			})
 		},
 	}
 	c.Flags().StringVar(&cfgPath, "config", "", "config file path (searched if unset: ./, ~/.nexus-cli/, /etc/nexus-cli/)")
+	addOutputFlag(c, &output)
 	return c
 }
 
@@ -284,6 +322,111 @@ func printNodeHealth(cfg *config.Config, verbose bool) int {
 		}
 	}
 	return failed
+}
+
+type haNodeHealthResult struct {
+	Name    string              `json:"name"`
+	Role    string              `json:"role"`
+	BaseURL string              `json:"baseUrl"`
+	Status  string              `json:"status"`
+	Checks  []healthCheckResult `json:"checks,omitempty"`
+	Error   string              `json:"error,omitempty"`
+}
+
+type haJobStatus struct {
+	Name          string `json:"name"`
+	Status        string `json:"status"`
+	Method        string `json:"method,omitempty"`
+	Schedule      string `json:"schedule,omitempty"`
+	LastSuccessAt string `json:"lastSuccessAt,omitempty"`
+	LastErrorAt   string `json:"lastErrorAt,omitempty"`
+	LastError     string `json:"lastError,omitempty"`
+	Lag           string `json:"lag,omitempty"`
+}
+
+func collectHANodeHealth(cfg *config.Config) ([]haNodeHealthResult, []string, int, error) {
+	nodes := make([]haNodeHealthResult, 0, len(cfg.HA.Nodes))
+	var warnings []string
+	failed := 0
+	var firstErr error
+	for _, node := range cfg.HA.Nodes {
+		out := haNodeHealthResult{Name: node.Name, Role: node.Role, BaseURL: node.BaseURL}
+		client, err := newHAClient(cfg, node)
+		if err != nil {
+			out.Status = "fail"
+			out.Error = err.Error()
+			failed++
+			if firstErr == nil {
+				firstErr = err
+			}
+			nodes = append(nodes, out)
+			continue
+		}
+		checks := []healthCheck{
+			{"list repositories", func() error { _, err := client.ListRepositories(); return err }},
+			{"list privileges", func() error { _, err := client.ListPrivileges(); return err }},
+			{"read guest role", func() error { _, err := client.GetRole(cfg.GuestAccess.RoleName); return err }},
+		}
+		results, nodeWarnings, nodeFailed, nodeErr := runHealthChecks(checks)
+		out.Checks = results
+		if nodeFailed > 0 {
+			out.Status = "fail"
+			failed++
+			if firstErr == nil {
+				firstErr = nodeErr
+			}
+		} else if len(nodeWarnings) > 0 {
+			out.Status = "warn"
+		} else {
+			out.Status = "ok"
+		}
+		for _, warning := range nodeWarnings {
+			warnings = append(warnings, node.Name+": "+warning)
+		}
+		nodes = append(nodes, out)
+	}
+	if firstErr == nil && failed > 0 {
+		firstErr = fmt.Errorf("%d HA node health check(s) failed", failed)
+	}
+	return nodes, warnings, failed, firstErr
+}
+
+func haJobStatuses(state haops.SyncState, cfg *config.Config, now time.Time) []haJobStatus {
+	specs := []struct {
+		name string
+		cfg  config.HASyncConfig
+	}{
+		{name: "blob", cfg: cfg.HA.Replication.BlobSync},
+		{name: "metadata", cfg: cfg.HA.Replication.MetadataSync},
+	}
+	out := make([]haJobStatus, 0, len(specs))
+	for _, spec := range specs {
+		job := state.Jobs[spec.name]
+		status := "ok"
+		if job.LastSuccessAt == "" {
+			status = "unknown"
+		}
+		if job.LastError != "" {
+			status = "error"
+		}
+		lagText := ""
+		if lag, ok := haops.Lag(job.LastSuccessAt, now); ok {
+			lagText = lag.Round(time.Second).String()
+		}
+		method := fallback(job.Method, spec.cfg.Method)
+		schedule := fallback(job.Schedule, spec.cfg.Schedule)
+		out = append(out, haJobStatus{
+			Name:          spec.name,
+			Status:        status,
+			Method:        method,
+			Schedule:      schedule,
+			LastSuccessAt: job.LastSuccessAt,
+			LastErrorAt:   job.LastErrorAt,
+			LastError:     job.LastError,
+			Lag:           lagText,
+		})
+	}
+	return out
 }
 
 func newHAClient(cfg *config.Config, node config.HANodeConfig) (*nexus.Client, error) {

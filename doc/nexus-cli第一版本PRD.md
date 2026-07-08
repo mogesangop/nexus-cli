@@ -6,6 +6,12 @@
 
 nexus-cli 第一版本 PRD
 
+> 后续需求变更（当前实现以此为准）：
+> - “受保护仓库”现在表示 guest / anonymous 完全不可见、不可通过精确 URL 下载，应配置到 `guestAccess.deny.repositories`。
+> - `guestAccess.readOnly.repositories` 仅保留为高级场景：UI 不可见但精确 URL 可下载，不再代表“受保护仓库”。
+> - 推荐命令为 `nexus-cli guest protect`；`nexus-cli guest sync` 仅作为兼容别名保留。
+> - `share grant` 仅支持 raw 仓库，并在创建用户前检查其他非 admin 用户是否已有同仓库或重叠目录访问。
+
 1. 文档信息
 
 项目	内容

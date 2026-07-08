@@ -11,18 +11,21 @@ The first version solves one problem: a guest (anonymous user) can see too
 many repositories and artifacts in the Nexus UI. Nexus does not support
 "grant browse to all repositories *except* one", so `nexus-cli` reads the
 repository list, builds per-repository `repository-view` privileges, and binds
-them to a guest role — granting `browse+read` to public repos and only `read`
-(no `browse`) to repos that must stay hidden from the UI while remaining
-downloadable via exact URL.
+them to a guest role — granting `browse+read` to public repos and no guest
+access at all to protected repos that must stay invisible and non-downloadable.
+The older `readOnly` policy remains available for the advanced case where a
+repo should be hidden from UI browse but still downloadable by exact URL.
 
 See `doc/nexus-cli第一版本PRD.md` for the full product spec.
 
 A second use case is **per-user path-scoped sharing**: `share grant` creates a
 content selector, a path-scoped `browse+read` privilege, a role, and a user so
 a named person can browse/download artifacts under one directory of one repo —
-without exposing anything else. Share resources use a separate `priv_share_`
-prefix and their own `role_share_*` roles, so they are invisible to the guest
-subsystem and vice versa.
+without exposing anything else. Before creating the grant, it checks existing
+non-admin users and refuses to continue if another user already has repo-wide
+or overlapping path access. Share resources use a separate `priv_share_` prefix
+and their own `role_share_*` roles, so they are invisible to the guest subsystem
+and vice versa.
 
 A third use case manages `raw/hosted` repositories and artifact retention on
 Nexus Community/OSS. The CLI safely reconciles repository settings and can
@@ -35,6 +38,10 @@ replication, manual fencing, and guided failover. The CLI does not automate F5
 or claim zero RPO; it provides dual-node health/status, one-shot sync command
 execution, fencing gates, and audit records. See
 `doc/nexus主从HA模式PRD.md`.
+
+When an AI Agent calls `nexus-cli`, read `doc/AI可调用能力清单.md` and
+`doc/AI调用指南.md` first, then follow the sequence: inspect state, dry-run /
+preview, get human confirmation, execute, and check audit records.
 
 ## Install
 
@@ -114,8 +121,9 @@ CGO_ENABLED=0 go build -o nexus-cli ./cmd/nexus-cli
 #    ~/.nexus-cli/config.yaml (dir created with 0700 if missing).
 ./nexus-cli config init
 
-# 2. Edit the config: set baseUrl, roleName, and the readOnly / browseRead
-#    repository lists. Then export the admin password:
+# 2. Edit the config: set baseUrl, roleName, and the deny / browseRead
+#    repository lists. Put protected repos in deny.repositories. Then export
+#    the admin password:
 export NEXUS_ADMIN_PASSWORD='your_password'
 
 # 3. Verify connectivity. --config is optional; if unset the CLI searches
@@ -124,10 +132,10 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ./nexus-cli health check
 
 # 4. Preview the plan (no changes applied).
-./nexus-cli guest sync --dry-run
+./nexus-cli guest protect --dry-run
 
 # 5. Apply.
-./nexus-cli guest sync
+./nexus-cli guest protect
 
 # 6. Verify drift.
 ./nexus-cli guest check
@@ -156,7 +164,9 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 The grant is idempotent: re-running with the same args reuses the existing
 selector, privilege, and role. An existing user is an **error** — the password
-is never reset. Partial progress is not rolled back, so re-running is safe.
+is never reset. `share grant` supports raw repositories only and fails before
+creating anything if another non-admin user already has access to the requested
+repo/path. Partial progress is not rolled back, so re-running is safe.
 
 ## Commands
 
@@ -170,19 +180,20 @@ is used verbatim (no search; a typo surfaces as a read error).
 | `config init [--output config.yaml]` | Generate a config template (default: `~/.nexus-cli/config.yaml`). |
 | `repo list [--format F] [--type T]` | List repositories, optionally filtered by format/type. |
 | `repo get --name R --format F --type T` | Show one repository's full API payload. |
-| `repo apply [--dry-run]` | Apply generic repositories declared in `repositories.managed`. |
-| `repo ensure --name R --format F --type T --settings FILE [--dry-run]` | Create or update one generic repository from YAML/JSON settings. |
-| `repo raw apply [--dry-run]` | Apply declared raw hosted repositories. |
-| `repo raw ensure --name R --blob-store B [...]` | Create or safely update one raw hosted repository. |
+| `repo apply [--dry-run] [--yes]` | Apply generic repositories declared in `repositories.managed`. Real changes require `--yes`. |
+| `repo ensure --name R --format F --type T --settings FILE [--dry-run] [--yes]` | Create or update one generic repository from YAML/JSON settings. Real changes require `--yes`. |
+| `repo raw apply [--dry-run] [--yes]` | Apply declared raw hosted repositories. Real changes require `--yes`. |
+| `repo raw ensure --name R --blob-store B [...] [--dry-run] [--yes]` | Create or safely update one raw hosted repository. Real changes require `--yes`. |
 | `repo lifecycle preview --repo R [...]` | Read-only preview of expired raw components. |
 | `repo lifecycle run --repo R --yes [...]` | Delete expired raw components. |
 | `blobstore list` | List blob stores. |
 | `blobstore get --name B --type file` | Show one file blob store. |
-| `blobstore apply [--dry-run]` | Apply file blob stores declared in `blobStores.file`. |
-| `blobstore ensure --name B --path P [...]` | Create or update one file blob store. |
-| `guest sync [--dry-run] [--report FILE]` | Synchronize guest role privileges from config. |
+| `blobstore apply [--dry-run] [--yes]` | Apply file blob stores declared in `blobStores.file`. Real changes require `--yes`. |
+| `blobstore ensure --name B --path P [...] [--dry-run] [--yes]` | Create or update one file blob store. Real changes require `--yes`. |
+| `guest protect [--dry-run] [--yes] [--report FILE]` | Protect guest access from config. Real changes require `--yes`. |
+| `guest sync [--dry-run] [--yes] [--report FILE]` | Deprecated alias for `guest protect`. Real changes require `--yes`. |
 | `guest check` | Read-only check that the guest role matches config. |
-| `share grant --repo R --path /p/ --user U --email E` | Create a path-scoped browse+read grant for a named user. |
+| `share grant --repo R --path /p/ --user U --email E [--dry-run] [--yes]` | Create a path-scoped browse+read grant for a named user. Real changes require `--yes`. |
 | `health check` | Connectivity / API / auth health check. |
 | `ha status` | Show both HA node health plus last blob / metadata sync time and lag. |
 | `ha health` | Run API health checks against both HA nodes. |
@@ -346,15 +357,15 @@ A repository in `deny.repositories` gets no privilege. In `readOnly` it gets
 `read` only (hidden from UI, still downloadable). Matching `browseRead` (and
 not excluded) gets `browse+read`. Otherwise `defaultPolicy` decides.
 
-### Protected repository: hidden in UI, downloadable by exact URL
+### Protected repository: hidden and non-downloadable for guest
 
-A protected repository keeps anonymous `read` access but does not grant
-`browse`. Nexus UI repository listing and tree browsing depend on `browse`;
-exact URL downloads depend on `read`. Configure it in two places:
+A protected repository grants no anonymous `browse` or `read`. Nexus UI
+repository listing and tree browsing depend on `browse`; exact URL downloads
+depend on `read`. Configure protected repos in `deny.repositories`:
 
 1. Add the repository to `browseRead.excludeRepositories` so it does not get
    `browse+read`.
-2. Add the same repository to `readOnly.repositories` so it still gets `read`.
+2. Add the same repository to `deny.repositories` so it gets no guest privilege.
 
 Example for `devops-prod-generic`:
 
@@ -370,10 +381,10 @@ guestAccess:
     excludeRepositories:
       - "devops-prod-generic"
   readOnly:
+    repositories: []
+  deny:
     repositories:
       - "devops-prod-generic"
-  deny:
-    repositories: []
   actions:
     browseRead:
       - browse
@@ -387,8 +398,8 @@ the anonymous user (`anonymous`) has that role. Then apply and check:
 
 ```sh
 export NEXUS_ADMIN_PASSWORD='your_password'
-./nexus-cli guest sync --config config.yaml --dry-run
-./nexus-cli guest sync --config config.yaml
+./nexus-cli guest protect --config config.yaml --dry-run
+./nexus-cli guest protect --config config.yaml --yes
 ./nexus-cli guest check --config config.yaml
 ```
 
@@ -398,18 +409,15 @@ Verify the behavior:
 # 1. Open the Nexus UI as anonymous / logged out. devops-prod-generic should
 #    not appear in the repository list.
 
-# 2. Exact artifact URLs should still download. Use a real artifact path.
+# 2. Exact artifact URLs should fail for anonymous / logged-out users.
 curl -fL \
-  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar' \
-  -o /tmp/artifact.tar
+  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar'
 ```
 
-If direct download fails, check that the repository is not listed in
-`deny.repositories`, and that the anonymous user has the configured guest role.
-If the repository is still visible in the UI, the anonymous user probably has
-another role or privilege that grants `browse`. `guest sync` removes broad
-entries listed in `forbiddenPrivileges`, but it does not delete every
-non-managed role.
+If direct download still works or the repository is still visible in the UI,
+the anonymous user probably has another role or privilege that grants access.
+`guest protect` removes broad entries listed in `forbiddenPrivileges`, but it
+does not delete every non-managed role.
 
 ### Privilege naming
 
@@ -423,14 +431,15 @@ repo name are replaced with `_`.
 Privileges on the role that are **not** managed are preserved — **except**
 those listed in `forbiddenPrivileges` (e.g. `nx-all`, `nx-admin`,
 `nx-repository-view-*-*-browse`), which are always removed from the guest
-role during `sync`. `warnPrivileges` (e.g. `nx-search-read`) are flagged in
+role during `protect`. `warnPrivileges` (e.g. `nx-search-read`) are flagged in
 `guest check` but not removed by default.
 
 ## Idempotency
 
-`guest sync` is idempotent: a second run with unchanged state creates nothing
-and removes nothing. Existing managed privileges that match the config are
-skipped; stale managed privileges are removed.
+`guest protect` is idempotent: a second run with unchanged state creates
+nothing and removes nothing. Existing managed privileges that match the config
+are skipped; stale managed privileges are removed. `guest sync` remains as a
+deprecated compatibility alias.
 
 `repo raw apply` is also idempotent and never migrates a blob store or
 delete/recreates a conflicting repository. Preview changes and retention first:

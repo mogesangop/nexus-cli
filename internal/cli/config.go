@@ -48,7 +48,7 @@ func newConfigInitCmd() *cobra.Command {
 				return fmt.Errorf("write %s: %w", output, err)
 			}
 			fmt.Printf("Generated %s\n", output)
-			fmt.Println("Edit the file (especially baseUrl, passwordEnv, roleName, repository lists) before running sync.")
+			fmt.Println("Edit the file (especially baseUrl, passwordEnv, roleName, repository lists) before running guest protect.")
 			return nil
 		},
 	}

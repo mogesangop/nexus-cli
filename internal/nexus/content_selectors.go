@@ -31,6 +31,16 @@ func (c *Client) CreateContentSelector(name, expression string) (*ContentSelecto
 	return &out, nil
 }
 
+// ListContentSelectors returns all Nexus content selectors.
+// Endpoint: GET /security/content-selectors.
+func (c *Client) ListContentSelectors() ([]ContentSelector, error) {
+	var out []ContentSelector
+	if err := c.get("/security/content-selectors", &out); err != nil {
+		return nil, fmt.Errorf("list content selectors: %w", err)
+	}
+	return out, nil
+}
+
 // GetContentSelector fetches a content selector by name. Returns an *APIError
 // with Status 404 (see IsNotFound) when it does not exist.
 // Endpoint: GET /security/content-selectors/{name}.

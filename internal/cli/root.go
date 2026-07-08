@@ -23,9 +23,9 @@ func NewRoot() *Root {
 	root := &cobra.Command{
 		Use:   "nexus-cli",
 		Short: "Nexus Repository 3 guest access governance CLI",
-		Long: "nexus-cli synchronizes Nexus Repository 3.76 guest/anonymous " +
-			"role permissions so a repository can be hidden from the UI while " +
-			"remaining downloadable via exact URL. See doc/ for the PRD.",
+		Long: "nexus-cli governs Nexus Repository 3.76 guest/anonymous " +
+			"role permissions so public repositories stay browsable while " +
+			"protected repositories are hidden and non-downloadable. See doc/ for the PRD.",
 	}
 	root.AddCommand(NewConfigCmd(), NewRepoCmd(), NewBlobStoreCmd(), NewGuestCmd(), NewHealthCmd(), NewShareCmd(), NewHACmd())
 	return &Root{cmd: root}
