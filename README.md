@@ -346,6 +346,71 @@ A repository in `deny.repositories` gets no privilege. In `readOnly` it gets
 `read` only (hidden from UI, still downloadable). Matching `browseRead` (and
 not excluded) gets `browse+read`. Otherwise `defaultPolicy` decides.
 
+### Protected repository: hidden in UI, downloadable by exact URL
+
+A protected repository keeps anonymous `read` access but does not grant
+`browse`. Nexus UI repository listing and tree browsing depend on `browse`;
+exact URL downloads depend on `read`. Configure it in two places:
+
+1. Add the repository to `browseRead.excludeRepositories` so it does not get
+   `browse+read`.
+2. Add the same repository to `readOnly.repositories` so it still gets `read`.
+
+Example for `devops-prod-generic`:
+
+```yaml
+guestAccess:
+  enabled: true
+  roleName: "role_guest_repository_access"
+  anonymousUserId: "anonymous"
+  defaultPolicy: "browseRead"
+  browseRead:
+    includeRepositories:
+      - "*"
+    excludeRepositories:
+      - "devops-prod-generic"
+  readOnly:
+    repositories:
+      - "devops-prod-generic"
+  deny:
+    repositories: []
+  actions:
+    browseRead:
+      - browse
+      - read
+    readOnly:
+      - read
+```
+
+Before running, make sure `role_guest_repository_access` exists in Nexus and
+the anonymous user (`anonymous`) has that role. Then apply and check:
+
+```sh
+export NEXUS_ADMIN_PASSWORD='your_password'
+./nexus-cli guest sync --config config.yaml --dry-run
+./nexus-cli guest sync --config config.yaml
+./nexus-cli guest check --config config.yaml
+```
+
+Verify the behavior:
+
+```sh
+# 1. Open the Nexus UI as anonymous / logged out. devops-prod-generic should
+#    not appear in the repository list.
+
+# 2. Exact artifact URLs should still download. Use a real artifact path.
+curl -fL \
+  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar' \
+  -o /tmp/artifact.tar
+```
+
+If direct download fails, check that the repository is not listed in
+`deny.repositories`, and that the anonymous user has the configured guest role.
+If the repository is still visible in the UI, the anonymous user probably has
+another role or privilege that grants `browse`. `guest sync` removes broad
+entries listed in `forbiddenPrivileges`, but it does not delete every
+non-managed role.
+
 ### Privilege naming
 
 `priv_guest_{format}_{sanitizedRepo}_{sortedActions}` — e.g.

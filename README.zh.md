@@ -296,6 +296,61 @@ deny > readOnly > browseRead > defaultPolicy
 
 命中 `deny.repositories` 的仓库不授予任何权限；命中 `readOnly` 的只授予 `read`（UI 不可见，仍可下载）；匹配 `browseRead` 且未被排除的授予 `browse+read`；其余由 `defaultPolicy` 决定。
 
+### 设置受保护仓库：UI 不可见，但可直链下载
+
+所谓“受保护仓库”就是给匿名访客保留 `read`，但不授予 `browse`。Nexus UI 的仓库列表和目录浏览依赖 `browse`；精确 URL 下载依赖 `read`。因此配置时要做两件事：
+
+1. 从 `browseRead.excludeRepositories` 排除该仓库，避免授予 `browse+read`。
+2. 加入 `readOnly.repositories`，只授予 `read`。
+
+例如要保护 `devops-prod-generic`：
+
+```yaml
+guestAccess:
+  enabled: true
+  roleName: "role_guest_repository_access"
+  anonymousUserId: "anonymous"
+  defaultPolicy: "browseRead"
+  browseRead:
+    includeRepositories:
+      - "*"
+    excludeRepositories:
+      - "devops-prod-generic"
+  readOnly:
+    repositories:
+      - "devops-prod-generic"
+  deny:
+    repositories: []
+  actions:
+    browseRead:
+      - browse
+      - read
+    readOnly:
+      - read
+```
+
+运行前确认 Nexus 中已存在 `role_guest_repository_access`，并且匿名用户 `anonymous` 已绑定这个角色。然后执行：
+
+```sh
+export NEXUS_ADMIN_PASSWORD='your_password'
+./nexus-cli guest sync --config config.yaml --dry-run
+./nexus-cli guest sync --config config.yaml
+./nexus-cli guest check --config config.yaml
+```
+
+验证结果：
+
+```sh
+# 1. 用匿名 / 未登录浏览器打开 Nexus UI，仓库列表中不应看到 devops-prod-generic。
+
+# 2. 用精确制品 URL 仍应能下载。路径必须是真实存在的制品路径。
+curl -fL \
+  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar' \
+  -o /tmp/artifact.tar
+```
+
+如果直链也无法下载，先检查该仓库是否误放进了 `deny.repositories`，再检查匿名用户是否绑定了 `role_guest_repository_access`。如果 UI 仍能看到该仓库，通常是匿名用户还有其它角色或权限包含了该仓库的 `browse`；`guest sync` 会移除 `forbiddenPrivileges` 中列出的宽泛 browse 权限，但不会删除所有非托管角色。
+
 ### 权限命名
 
 `priv_guest_{format}_{sanitize后的仓库名}_{排序后的actions}` —— 例如
