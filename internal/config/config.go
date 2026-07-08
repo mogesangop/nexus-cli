@@ -1,8 +1,8 @@
 // Package config defines the YAML configuration model for nexus-cli and
 // provides loading, default-template generation, and validation.
 //
-// Field shape follows PRD section 9. Defaults emitted by Default() are a
-// generic placeholder template (no environment-specific repository names).
+// Field shape follows PRD section 9. Defaults emitted by Default() provide a
+// runnable starting template for the primary devops raw repository workflow.
 package config
 
 import (
@@ -194,9 +194,7 @@ type ReportConfig struct {
 	Format    string `yaml:"format"`
 }
 
-// Default returns a generic placeholder configuration template suitable for
-// `config init`. It contains no environment-specific repository names; the
-// operator must fill in real values before running sync.
+// Default returns a configuration template suitable for `config init`.
 func Default() *Config {
 	return &Config{
 		Nexus: NexusConfig{
@@ -209,6 +207,22 @@ func Default() *Config {
 		HA: HAConfig{
 			Enabled: false,
 			Role:    "primary",
+			Nodes: []HANodeConfig{
+				{
+					Name:        "primary",
+					Role:        "primary",
+					BaseURL:     "http://nexus-a.example.com",
+					Username:    "admin",
+					PasswordEnv: "NEXUS_PRIMARY_PASSWORD",
+				},
+				{
+					Name:        "standby",
+					Role:        "standby",
+					BaseURL:     "http://nexus-b.example.com",
+					Username:    "admin",
+					PasswordEnv: "NEXUS_STANDBY_PASSWORD",
+				},
+			},
 			Replication: HAReplicationConfig{
 				StateFile: "./logs/nexus-cli-ha-state.json",
 				BlobSync: HASyncConfig{
@@ -225,8 +239,49 @@ func Default() *Config {
 				RequireFencing: true,
 			},
 		},
-		Repositories: RepositoriesConfig{Raw: []RawRepository{}, Managed: []ManagedRepository{}},
-		BlobStores:   BlobStoresConfig{File: []FileBlobStore{}},
+		Repositories: RepositoriesConfig{
+			Raw: []RawRepository{
+				{
+					Name:   "devops-prod-generic",
+					Online: true,
+					Storage: RawStorage{
+						BlobStoreName:               "default",
+						StrictContentTypeValidation: true,
+						WritePolicy:                 "allow_once",
+					},
+					ContentDisposition: "attachment",
+					Lifecycle: LifecycleConfig{
+						Enabled:       true,
+						RetentionDays: 90,
+						IncludePaths:  []string{"^releases/.*"},
+						ExcludePaths:  []string{"^releases/latest/.*"},
+					},
+				},
+			},
+			Managed: []ManagedRepository{
+				{
+					Name:   "npm-hosted",
+					Format: "npm",
+					Type:   "hosted",
+					Settings: map[string]any{
+						"online": true,
+						"storage": map[string]any{
+							"blobStoreName":               "default",
+							"strictContentTypeValidation": true,
+							"writePolicy":                 "ALLOW",
+						},
+					},
+				},
+			},
+		},
+		BlobStores: BlobStoresConfig{
+			File: []FileBlobStore{
+				{
+					Name: "default",
+					Path: "/nexus-data/blobs/default",
+				},
+			},
+		},
 		GuestAccess: GuestAccess{
 			Enabled:         true,
 			RoleName:        "role_guest_repository_access",

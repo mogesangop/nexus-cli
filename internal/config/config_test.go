@@ -30,6 +30,32 @@ func TestValidate_OK(t *testing.T) {
 	}
 }
 
+func TestDefaultIncludesDevopsRawRepository(t *testing.T) {
+	c := Default()
+	if len(c.Repositories.Raw) != 1 {
+		t.Fatalf("raw repositories = %d, want 1", len(c.Repositories.Raw))
+	}
+	raw := c.Repositories.Raw[0]
+	if raw.Name != "devops-prod-generic" {
+		t.Fatalf("raw repository name = %q, want devops-prod-generic", raw.Name)
+	}
+	if raw.Storage.BlobStoreName != "default" || raw.Storage.WritePolicy != "allow_once" {
+		t.Fatalf("unexpected raw storage defaults: %+v", raw.Storage)
+	}
+	if raw.Lifecycle.RetentionDays != 90 {
+		t.Fatalf("retentionDays = %d, want 90", raw.Lifecycle.RetentionDays)
+	}
+	if len(c.Repositories.Managed) != 1 || c.Repositories.Managed[0].Name != "npm-hosted" {
+		t.Fatalf("managed repositories = %#v, want npm-hosted", c.Repositories.Managed)
+	}
+	if len(c.BlobStores.File) != 1 || c.BlobStores.File[0].Name != "default" {
+		t.Fatalf("file blob stores = %#v, want default", c.BlobStores.File)
+	}
+	if got := c.GuestAccess.ReadOnly.Repositories; len(got) != 1 || got[0] != "REPLACE_WITH_READ_ONLY_REPO" {
+		t.Fatalf("readOnly repositories = %#v, want placeholder", got)
+	}
+}
+
 func TestValidateHAConfig(t *testing.T) {
 	valid := func() *Config {
 		c := Default()

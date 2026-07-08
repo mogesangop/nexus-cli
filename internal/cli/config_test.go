@@ -3,6 +3,8 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/231397220/nexus-cli/internal/config"
@@ -35,5 +37,31 @@ func TestConfigInit_CreatesDirAndWritesDefault(t *testing.T) {
 	}
 	if _, err := config.Load(path); err != nil {
 		t.Fatalf("written config does not load: %v", err)
+	}
+	generated, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("load generated config: %v", err)
+	}
+	example, err := config.Load(filepath.Join("..", "..", "examples", "config.example.yaml"))
+	if err != nil {
+		t.Fatalf("load example config: %v", err)
+	}
+	if !reflect.DeepEqual(generated, example) {
+		t.Fatalf("generated config does not match examples/config.example.yaml\n generated=%#v\n example=%#v", generated, example)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated config: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"repositories:",
+		"  raw:",
+		`    - name: devops-prod-generic`,
+		"      storage:",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("generated config missing %q:\n%s", want, text)
+		}
 	}
 }
