@@ -102,7 +102,7 @@ func (s *Syncer) apply(client *nexus.Client, plan *SyncPlan, role *nexus.Role) e
 			if s.namer.IsManaged(p) {
 				continue // managed set already reconciled above
 			}
-			if contains(s.cfg.GuestAccess.ForbiddenPrivileges, p) {
+			if matchesAny(s.cfg.GuestAccess.ForbiddenPrivileges, p) {
 				continue // forbidden -> drop
 			}
 			desired = append(desired, p)
@@ -121,14 +121,87 @@ func (s *Syncer) apply(client *nexus.Client, plan *SyncPlan, role *nexus.Role) e
 		if _, err := client.CreateRole(newRole); err != nil {
 			return fmt.Errorf("create role: %w", err)
 		}
-		return nil
+	} else {
+		updated := *role
+		updated.Privileges = desired
+		if err := client.UpdateRole(s.cfg.GuestAccess.RoleName, &updated); err != nil {
+			return fmt.Errorf("update role: %w", err)
+		}
 	}
-	updated := *role
-	updated.Privileges = desired
-	if err := client.UpdateRole(s.cfg.GuestAccess.RoleName, &updated); err != nil {
-		return fmt.Errorf("update role: %w", err)
+
+	// 4. Ensure the anonymous user is actually governed by the target role.
+	if err := s.reconcileAnonymousUser(client); err != nil {
+		return err
 	}
 	return nil
+}
+
+func (s *Syncer) reconcileAnonymousUser(client *nexus.Client) error {
+	userID := s.cfg.GuestAccess.AnonymousUserID
+	if userID == "" {
+		return nil
+	}
+	user, err := client.GetUser(userID)
+	if err != nil {
+		return fmt.Errorf("read anonymous user %s: %w", userID, err)
+	}
+
+	roles := make([]string, 0, len(user.Roles)+1)
+	for _, roleID := range user.Roles {
+		if roleID == s.cfg.GuestAccess.RoleName {
+			roles = append(roles, roleID)
+			continue
+		}
+		risky, err := s.roleHasForbiddenPrivilege(client, roleID, map[string]bool{})
+		if err != nil {
+			return fmt.Errorf("inspect anonymous role %s: %w", roleID, err)
+		}
+		if risky {
+			continue
+		}
+		roles = append(roles, roleID)
+	}
+	if !contains(roles, s.cfg.GuestAccess.RoleName) {
+		roles = append(roles, s.cfg.GuestAccess.RoleName)
+	}
+	roles = dedup(roles)
+	if sameStringSet(user.Roles, roles) {
+		return nil
+	}
+
+	updated := *user
+	updated.Roles = roles
+	if err := client.UpdateUser(userID, &updated); err != nil {
+		return fmt.Errorf("update anonymous user %s roles: %w", userID, err)
+	}
+	return nil
+}
+
+func (s *Syncer) roleHasForbiddenPrivilege(client *nexus.Client, roleID string, seen map[string]bool) (bool, error) {
+	if seen[roleID] {
+		return false, nil
+	}
+	seen[roleID] = true
+
+	role, err := client.GetRole(roleID)
+	if err != nil {
+		return false, err
+	}
+	for _, privilege := range role.Privileges {
+		if matchesAny(s.cfg.GuestAccess.ForbiddenPrivileges, privilege) {
+			return true, nil
+		}
+	}
+	for _, nested := range role.Roles {
+		risky, err := s.roleHasForbiddenPrivilege(client, nested, seen)
+		if err != nil {
+			return false, err
+		}
+		if risky {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func toReport(plan *SyncPlan, dryRun bool) *report.SyncReport {
@@ -161,4 +234,21 @@ func dedup(in []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, v := range a {
+		seen[v]++
+	}
+	for _, v := range b {
+		seen[v]--
+		if seen[v] < 0 {
+			return false
+		}
+	}
+	return true
 }

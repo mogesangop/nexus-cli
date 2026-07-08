@@ -39,11 +39,9 @@ type CheckReport struct {
 // PrintSync writes a sync report to stdout in the human-readable format from
 // PRD 8.4/8.5.
 func PrintSync(r *SyncReport) {
-	fmt.Println("Guest Access Sync Plan (dry-run)")
 	if r.DryRun {
-		// label already notes dry-run; for applied runs we print "Completed".
-	}
-	if !r.DryRun {
+		fmt.Println("Guest Access Sync Plan (dry-run)")
+	} else {
 		fmt.Println("Guest Access Sync Completed")
 	}
 	fmt.Println("Target Role:")

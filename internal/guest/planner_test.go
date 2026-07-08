@@ -139,6 +139,25 @@ func TestBuild_PlanShape(t *testing.T) {
 	}
 }
 
+func TestBuild_ForbiddenPrivilegesUseGlobMatching(t *testing.T) {
+	c := baseConfig()
+	c.GuestAccess.ForbiddenPrivileges = []string{"nx-repository-view-*-*-browse"}
+	p := NewPlanner(c)
+	existingAll := []string{
+		"nx-repository-view-raw-devops-prod-generic-browse",
+		"nx-repository-view-raw-devops-prod-generic-read",
+	}
+
+	plan := p.Build(repos(), nil, existingAll)
+
+	if !containsString(plan.RemovedRiskyPrivileges, "nx-repository-view-raw-devops-prod-generic-browse") {
+		t.Fatalf("expected concrete browse privilege to match forbidden glob, got %v", plan.RemovedRiskyPrivileges)
+	}
+	if containsString(plan.RemovedRiskyPrivileges, "nx-repository-view-raw-devops-prod-generic-read") {
+		t.Fatalf("read-only privilege should not match browse glob, got %v", plan.RemovedRiskyPrivileges)
+	}
+}
+
 func TestBuild_RemovesUnwantedManaged(t *testing.T) {
 	c := baseConfig()
 	p := NewPlanner(c)

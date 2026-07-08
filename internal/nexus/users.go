@@ -4,10 +4,11 @@ import "fmt"
 
 // User represents a Nexus security user.
 type User struct {
-	UserID       string   `json:"userID"`
+	UserID       string   `json:"userId"`
 	FirstName    string   `json:"firstName,omitempty"`
 	LastName     string   `json:"lastName,omitempty"`
 	EmailAddress string   `json:"emailAddress,omitempty"`
+	Source       string   `json:"source,omitempty"`
 	Status       string   `json:"status,omitempty"`
 	Roles        []string `json:"roles,omitempty"`
 }
@@ -19,7 +20,7 @@ type User struct {
 // NOTE: Field names should be verified against the target Nexus 3.76 Swagger.
 func (c *Client) CreateUser(u *User) (*User, error) {
 	body := map[string]any{
-		"userID":       u.UserID,
+		"userId":       u.UserID,
 		"firstName":    u.FirstName,
 		"lastName":     u.LastName,
 		"emailAddress": u.EmailAddress,
@@ -33,15 +34,61 @@ func (c *Client) CreateUser(u *User) (*User, error) {
 	return &out, nil
 }
 
-// GetUser fetches a user by id. Returns an *APIError with Status 404 (see
-// IsNotFound) when it does not exist.
-// Endpoint: GET /security/users/{id}.
+// ListUsers returns all Nexus users.
+// Endpoint: GET /security/users.
+func (c *Client) ListUsers() ([]User, error) {
+	var out []User
+	if err := c.get("/security/users", &out); err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	return out, nil
+}
+
+// GetUser fetches a user by id. Some Nexus versions do not support
+// GET /security/users/{id}; on 405 it falls back to ListUsers.
+// Returns an *APIError with Status 404 (see IsNotFound) when it does not exist.
+// Endpoint: GET /security/users/{id}, fallback GET /security/users.
 func (c *Client) GetUser(userID string) (*User, error) {
 	var out User
-	if err := c.get("/security/users/"+userID, &out); err != nil {
+	err := c.get("/security/users/"+userID, &out)
+	if err == nil {
+		return &out, nil
+	}
+	if !IsMethodNotAllowed(err) {
 		return nil, err
 	}
-	return &out, nil
+	users, listErr := c.ListUsers()
+	if listErr != nil {
+		return nil, listErr
+	}
+	for i := range users {
+		if users[i].UserID == userID {
+			return &users[i], nil
+		}
+	}
+	return nil, &APIError{Status: 404}
+}
+
+// UpdateUser replaces mutable fields for an existing user, including roles.
+// Endpoint: PUT /security/users/{id}.
+func (c *Client) UpdateUser(userID string, u *User) error {
+	status := u.Status
+	if status == "" {
+		status = "active"
+	}
+	body := map[string]any{
+		"userId":       userID,
+		"firstName":    u.FirstName,
+		"lastName":     u.LastName,
+		"emailAddress": u.EmailAddress,
+		"source":       u.Source,
+		"status":       status,
+		"roles":        u.Roles,
+	}
+	if err := c.put("/security/users/"+userID, body); err != nil {
+		return fmt.Errorf("update user %s: %w", userID, err)
+	}
+	return nil
 }
 
 // SetPassword sets the password for a user. This is the admin-set path

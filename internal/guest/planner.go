@@ -174,9 +174,9 @@ func (p *Planner) Build(repos []nexus.Repository, existingManaged, existingAll [
 		allSet[e] = struct{}{}
 	}
 	var risky []string
-	for _, f := range p.cfg.GuestAccess.ForbiddenPrivileges {
-		if _, ok := allSet[f]; ok {
-			risky = append(risky, f)
+	for e := range allSet {
+		if matchesAny(p.cfg.GuestAccess.ForbiddenPrivileges, e) {
+			risky = append(risky, e)
 		}
 	}
 
@@ -199,8 +199,12 @@ func (p *Planner) Build(repos []nexus.Repository, existingManaged, existingAll [
 		}
 	}
 	for _, w := range p.cfg.GuestAccess.WarnPrivileges {
-		if _, ok := allSet[w]; ok {
+		for e := range allSet {
+			if !matchesAny([]string{w}, e) {
+				continue
+			}
 			plan.Warnings = append(plan.Warnings, w+" exists; UI search may expose artifacts")
+			break
 		}
 	}
 	sort.Strings(plan.BrowseReadRepositories)

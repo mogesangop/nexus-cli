@@ -47,18 +47,29 @@ func (c *Checker) Check(client *nexus.Client) (*report.CheckReport, error) {
 
 	// Forbidden privileges -> FAIL if present.
 	for _, f := range c.cfg.GuestAccess.ForbiddenPrivileges {
-		if _, ok := privSet[f]; ok {
-			out.Fails = append(out.Fails, fmt.Sprintf("%s exists (forbidden)", f))
-		} else {
+		found := false
+		for p := range privSet {
+			if matchesAny([]string{f}, p) {
+				out.Fails = append(out.Fails, fmt.Sprintf("%s exists (forbidden)", p))
+				found = true
+			}
+		}
+		if !found {
 			out.Passes = append(out.Passes, fmt.Sprintf("no %s", f))
 		}
 	}
 
 	// Warn privileges -> WARN if present.
 	for _, w := range c.cfg.GuestAccess.WarnPrivileges {
-		if _, ok := privSet[w]; ok {
-			out.Warns = append(out.Warns, fmt.Sprintf("%s exists, UI search may expose artifacts", w))
+		for p := range privSet {
+			if matchesAny([]string{w}, p) {
+				out.Warns = append(out.Warns, fmt.Sprintf("%s exists, UI search may expose artifacts", p))
+			}
 		}
+	}
+
+	if err := c.checkAnonymousUserRoles(client, out); err != nil {
+		return nil, err
 	}
 
 	// Per-repository checks.
@@ -102,4 +113,56 @@ func (c *Checker) Check(client *nexus.Client) (*report.CheckReport, error) {
 	sort.Strings(out.Warns)
 	sort.Strings(out.Fails)
 	return out, nil
+}
+
+func (c *Checker) checkAnonymousUserRoles(client *nexus.Client, out *report.CheckReport) error {
+	userID := c.cfg.GuestAccess.AnonymousUserID
+	if userID == "" {
+		return nil
+	}
+	user, err := client.GetUser(userID)
+	if err != nil {
+		return fmt.Errorf("read anonymous user %s: %w", userID, err)
+	}
+	if contains(user.Roles, c.cfg.GuestAccess.RoleName) {
+		out.Passes = append(out.Passes, fmt.Sprintf("anonymous user has target role %s", c.cfg.GuestAccess.RoleName))
+	} else {
+		out.Fails = append(out.Fails, fmt.Sprintf("anonymous user missing target role %s", c.cfg.GuestAccess.RoleName))
+	}
+	for _, roleID := range user.Roles {
+		risky, err := c.roleHasForbiddenPrivilege(client, roleID, map[string]bool{})
+		if err != nil {
+			return fmt.Errorf("inspect anonymous role %s: %w", roleID, err)
+		}
+		if risky {
+			out.Fails = append(out.Fails, fmt.Sprintf("anonymous user role %s grants forbidden browse/admin privilege", roleID))
+		}
+	}
+	return nil
+}
+
+func (c *Checker) roleHasForbiddenPrivilege(client *nexus.Client, roleID string, seen map[string]bool) (bool, error) {
+	if seen[roleID] {
+		return false, nil
+	}
+	seen[roleID] = true
+	role, err := client.GetRole(roleID)
+	if err != nil {
+		return false, err
+	}
+	for _, privilege := range role.Privileges {
+		if matchesAny(c.cfg.GuestAccess.ForbiddenPrivileges, privilege) {
+			return true, nil
+		}
+	}
+	for _, nested := range role.Roles {
+		risky, err := c.roleHasForbiddenPrivilege(client, nested, seen)
+		if err != nil {
+			return false, err
+		}
+		if risky {
+			return true, nil
+		}
+	}
+	return false, nil
 }

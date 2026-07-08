@@ -66,6 +66,12 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &ae) && ae.Status == http.StatusNotFound
 }
 
+// IsMethodNotAllowed reports whether the error is a 405.
+func IsMethodNotAllowed(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && ae.Status == http.StatusMethodNotAllowed
+}
+
 // do performs an authenticated request. The body argument may be nil.
 // It returns the raw response body and a non-nil error on non-2xx responses.
 // Passwords and Authorization headers are never included in errors or logs.
