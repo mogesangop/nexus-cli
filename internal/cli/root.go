@@ -27,7 +27,7 @@ func NewRoot() *Root {
 			"role permissions so public repositories stay browsable while " +
 			"protected repositories are hidden and non-downloadable. See doc/ for the PRD.",
 	}
-	root.AddCommand(NewConfigCmd(), NewRepoCmd(), NewBlobStoreCmd(), NewGuestCmd(), NewHealthCmd(), NewShareCmd(), NewHACmd())
+	root.AddCommand(NewConfigCmd(), NewRepoCmd(), NewBlobStoreCmd(), NewGuestCmd(), NewHealthCmd(), NewUserCmd(), NewHACmd())
 	return &Root{cmd: root}
 }
 

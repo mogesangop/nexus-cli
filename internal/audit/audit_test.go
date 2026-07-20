@@ -11,7 +11,7 @@ func TestLoggerMasksSensitiveErrorFragments(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
 	logger := New(path, true, true)
 	err := logger.Write(Record{
-		Command:      "share grant",
+		Command:      "user create-readonly",
 		DryRun:       false,
 		Action:       "grant",
 		Result:       "failed",

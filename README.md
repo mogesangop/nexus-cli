@@ -18,12 +18,12 @@ repo should be hidden from UI browse but still downloadable by exact URL.
 
 See `doc/nexus-cli第一版本PRD.md` for the full product spec.
 
-A second use case is **per-user path-scoped sharing**: `share grant` creates a
+A second use case is **per-user path-scoped read-only access**: `user create-readonly` creates a
 content selector, a path-scoped `browse+read` privilege, a role, and a user so
 a named person can browse/download artifacts under one directory of one repo —
 without exposing anything else. Before creating the grant, it checks existing
 non-admin users and refuses to continue if another user already has repo-wide
-or overlapping path access. Share resources use a separate `priv_share_` prefix
+or overlapping path access. Read-only-user resources use a separate `priv_share_` prefix
 and their own `role_share_*` roles, so they are invisible to the guest subsystem
 and vice versa.
 
@@ -145,7 +145,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 ```sh
 # Dry-run first: prints the selector/privilege/role/user that would be created.
-./nexus-cli share grant \
+./nexus-cli user create-readonly \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -154,7 +154,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
   --dry-run
 
 # Apply. The generated password is printed ONCE to stdout — save it now.
-./nexus-cli share grant \
+./nexus-cli user create-readonly \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -164,7 +164,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 The grant is idempotent: re-running with the same args reuses the existing
 selector, privilege, and role. An existing user is an **error** — the password
-is never reset. `share grant` supports raw repositories only and fails before
+is never reset. `user create-readonly` supports raw repositories only and fails before
 creating anything if another non-admin user already has access to the requested
 repo/path. Partial progress is not rolled back, so re-running is safe.
 
@@ -193,14 +193,14 @@ is used verbatim (no search; a typo surfaces as a read error).
 | `guest protect [--dry-run] [--yes] [--report FILE]` | Protect guest access from config. Real changes require `--yes`. |
 | `guest sync [--dry-run] [--yes] [--report FILE]` | Deprecated alias for `guest protect`. Real changes require `--yes`. |
 | `guest check` | Read-only check that the guest role matches config. |
-| `share grant --repo R --path /p/ --user U --email E [--dry-run] [--yes]` | Create a path-scoped browse+read grant for a named user. Real changes require `--yes`. |
+| `user create-readonly --repo R --path /p/ --user U --email E [--dry-run] [--yes]` | Create a user with path-scoped read-only access. Real changes require `--yes`. |
 | `health check` | Connectivity / API / auth health check. |
 | `ha status` | Show both HA node health plus last blob / metadata sync time and lag. |
 | `ha health` | Run API health checks against both HA nodes. |
 | `ha sync --once [--timeout 30m]` | Execute configured blob and metadata sync commands once and update HA state. |
 | `ha failover --from primary --to standby --fencing-confirmed` | Guide a safe manual failover, optionally run catch-up sync, print F5 steps, and write audit. |
 
-### `share grant` flags
+### `user create-readonly` flags
 
 | Flag | Required | Description |
 | --- | --- | --- |

@@ -22,7 +22,7 @@
 - 仓库基础管理：`repo list/get/apply/ensure`。
 - Blob Store 管理：`blobstore list/get/apply/ensure`。
 - 访客权限治理：`guest protect/check`。
-- 用户目录级分享：`share grant`。
+- 用户目录级只读用户创建：`user create-readonly`。
 - Raw 制品生命周期：`repo lifecycle preview/run`。
 - 健康检查和温备 HA 运维：`health check`、`ha status/health/sync/failover`。
 
@@ -108,7 +108,7 @@ nexus-cli ha health --output json
 nexus-cli repo apply --dry-run --output json
 nexus-cli blobstore apply --dry-run --output json
 nexus-cli guest protect --dry-run --output json
-nexus-cli share grant --repo devops-prod-generic --path /team-a/ --user alice --email alice@example.com --dry-run --output json
+nexus-cli user create-readonly --repo devops-prod-generic --path /team-a/ --user alice --email alice@example.com --dry-run --output json
 nexus-cli repo lifecycle preview --repo devops-prod-generic --output json
 ```
 
@@ -118,7 +118,7 @@ nexus-cli repo lifecycle preview --repo devops-prod-generic --output json
 nexus-cli repo apply --yes --output json
 nexus-cli blobstore apply --yes --output json
 nexus-cli guest protect --yes --output json
-nexus-cli share grant --repo devops-prod-generic --path /team-a/ --user alice --email alice@example.com --yes --output json
+nexus-cli user create-readonly --repo devops-prod-generic --path /team-a/ --user alice --email alice@example.com --yes --output json
 nexus-cli repo lifecycle run --repo devops-prod-generic --yes --output json
 ```
 
@@ -155,7 +155,7 @@ AI 可发现能力：
 
 - 只读：`health check`、`repo list/get`、`blobstore list/get`、`guest check`、`ha status/health`。
 - 低风险写：`repo ensure/apply`、`blobstore ensure/apply`。
-- 高风险写：`guest protect`、`share grant`、`repo lifecycle run`、`ha sync`、`ha failover`。
+- 高风险写：`guest protect`、`user create-readonly`、`repo lifecycle run`、`ha sync`、`ha failover`。
 
 ### 7.3 Technology
 

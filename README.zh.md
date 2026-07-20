@@ -11,7 +11,7 @@
 
 完整产品规格见 `doc/nexus-cli第一版本PRD.md`。
 
-第二个用例是**按用户路径范围分享**：`share grant` 会创建内容选择器、路径范围的 `browse+read` 权限、角色和用户，让指定用户只能浏览/下载某一个 raw 仓库某一个目录下的制品。创建前会检查现有非 admin 用户，若其他用户已经拥有该仓库级或重叠目录访问权限，则拒绝继续，避免产生“看似独占但实际不隔离”的授权。分享类资源使用独立的 `priv_share_` 前缀和 `role_share_*` 角色，与访客子系统互不可见、互不影响。
+第二个用例是**按用户路径范围授予只读权限**：`user create-readonly` 会创建用户、内容选择器、路径范围的 `browse+read` 权限和角色，让指定用户只能浏览/下载某一个 raw 仓库某一个目录下的制品。创建前会检查现有非 admin 用户，若其他用户已经拥有该仓库级或重叠目录访问权限，则拒绝继续，避免产生“看似独占但实际不隔离”的授权。这些资源使用独立的 `priv_share_` 前缀和 `role_share_*` 角色，与访客子系统互不可见、互不影响。
 
 第三个用例是管理 `raw/hosted` 仓库及 Community/OSS 环境下的制品生命周期。CLI 可以幂等创建或安全更新仓库，并按文件最后修改时间与路径规则预览、删除过期制品。完整规格见 `doc/raw仓库与制品生命周期PRD.md`。
 
@@ -116,7 +116,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 ```sh
 # 先 dry-run：打印将会创建的 selector/privilege/role/user。
-./nexus-cli share grant \
+./nexus-cli user create-readonly \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -125,7 +125,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
   --dry-run
 
 # 正式执行。生成的密码只会打印一次到 stdout，请立即保存。
-./nexus-cli share grant \
+./nexus-cli user create-readonly \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -133,7 +133,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
   --first-name Alice --last-name Team
 ```
 
-该授权是幂等的：使用相同参数重复执行会复用已存在的 selector、privilege 和 role。若用户已存在则**报错**——绝不重置已有用户密码。`share grant` 仅支持 raw 仓库，并会在创建任何资源前检查是否存在其他非 admin 用户的冲突访问。失败时不回滚已完成的步骤，因此可安全重试。
+该命令是幂等的：使用相同参数重复执行会复用已存在的 selector、privilege 和 role。若用户已存在则**报错**——绝不重置已有用户密码。`user create-readonly` 仅支持 raw 仓库，并会在创建任何资源前检查是否存在其他非 admin 用户的冲突访问。失败时不回滚已完成的步骤，因此可安全重试。
 
 ## 命令
 
@@ -159,14 +159,14 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 | `guest protect [--dry-run] [--yes] [--report FILE]` | 按配置保护访客访问权限；真实变更必须带 `--yes`。 |
 | `guest sync [--dry-run] [--yes] [--report FILE]` | `guest protect` 的兼容别名，已不推荐；真实变更必须带 `--yes`。 |
 | `guest check` | 只读校验访客角色是否符合配置。 |
-| `share grant --repo R --path /p/ --user U --email E [--dry-run] [--yes]` | 为指定用户创建路径范围的 browse+read 授权；真实变更必须带 `--yes`。 |
+| `user create-readonly --repo R --path /p/ --user U --email E [--dry-run] [--yes]` | 创建拥有路径范围只读权限的用户；真实变更必须带 `--yes`。 |
 | `health check` | 连接 / API / 认证健康检查。 |
 | `ha status` | 查看双节点健康、blob / 元数据最后同步时间与延迟。 |
 | `ha health` | 对两个 HA 节点分别执行 API 健康检查。 |
 | `ha sync --once [--timeout 30m]` | 执行配置中的 blob 与元数据同步命令一次，并更新 HA 状态文件。 |
 | `ha failover --from primary --to standby --fencing-confirmed` | 引导安全人工切换：fencing 门禁、可选追赶同步、打印 F5 步骤并写审计。 |
 
-### `share grant` 参数
+### `user create-readonly` 参数
 
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |

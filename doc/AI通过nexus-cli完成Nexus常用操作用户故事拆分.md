@@ -38,7 +38,7 @@
 
 **Confirmation**：
 
-1. 文档列出核心命令：health、repo、blobstore、guest、share、repo lifecycle、ha。
+1. 文档列出核心命令：health、repo、blobstore、guest、user、repo lifecycle、ha。
 2. 每个命令标明风险等级：只读、低风险写、高风险写。
 3. 每个写操作标明是否支持 `--dry-run`。
 4. 每个真实写操作标明需要 `--yes` 或专用确认参数。
@@ -142,7 +142,7 @@
 
 **Conversation**：
 
-- 覆盖 `repo apply/ensure`、`blobstore apply/ensure`、`guest protect`、`share grant`、`repo lifecycle run`。
+- 覆盖 `repo apply/ensure`、`blobstore apply/ensure`、`guest protect`、`user create-readonly`、`repo lifecycle run`。
 - `repo lifecycle preview` 仍作为只读预览命令存在。
 - dry-run 不应创建用户、不应生成真实密码、不应写入 Nexus。
 - 设计参考：PRD §7.2 安全写操作。
@@ -152,7 +152,7 @@
 1. 目标写操作均支持 `--dry-run --output json`。
 2. dry-run 输出列出资源类型、资源名和计划动作。
 3. dry-run 不向 Nexus 发送创建、更新、删除请求。
-4. `share grant --dry-run` 不生成真实密码。
+4. `user create-readonly --dry-run` 不生成真实密码。
 5. 生命周期 dry-run 或 preview 能列出候选删除制品，不执行删除。
 6. dry-run 失败时返回标准 JSON 错误。
 
@@ -197,7 +197,7 @@
 1. `repo apply/ensure` 的审计记录包含仓库名和动作。
 2. `blobstore apply/ensure` 的审计记录包含 Blob Store 名和动作。
 3. `guest protect` 的审计记录包含目标角色和权限变更。
-4. `share grant` 的审计记录包含目标仓库、路径、用户和角色。
+4. `user create-readonly` 的审计记录包含目标仓库、路径、用户和角色。
 5. `repo lifecycle run` 的审计记录包含目标仓库和删除结果摘要。
 6. 审计日志不包含密码、Authorization header 或环境变量值。
 
@@ -277,7 +277,7 @@
 
 **Conversation**：
 
-- 该能力有助于解释 `share grant` 冲突和访客权限漂移。
+- 该能力有助于解释 `user create-readonly` 冲突和访客权限漂移。
 - 第一阶段只读，不做删除或批量修改。
 
 **Confirmation**：

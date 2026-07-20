@@ -130,7 +130,7 @@ func (g *Grantor) Grant(client NexusAPI, req Request) (*Result, error) {
 	}
 	res.Format = format
 	if format != "raw" {
-		return res, fmt.Errorf("share grant supports only raw repositories (repo %q has format %q)", req.Repo, format)
+		return res, fmt.Errorf("user create-readonly supports only raw repositories (repo %q has format %q)", req.Repo, format)
 	}
 
 	res.Selector = selectorName(req.Repo, res.Path)

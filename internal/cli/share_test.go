@@ -13,21 +13,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestShareGrantHelpDescribesRawExclusivePreflight(t *testing.T) {
-	cmd := NewShareCmd()
-	grant, _, err := cmd.Find([]string{"grant"})
-	if err != nil || grant == nil || grant.Name() != "grant" {
-		t.Fatalf("share grant command not found: cmd=%v err=%v", grant, err)
+func TestUserCreateReadonlyHelpDescribesRawExclusivePreflight(t *testing.T) {
+	cmd := NewUserCmd()
+	createReadonly, _, err := cmd.Find([]string{"create-readonly"})
+	if err != nil || createReadonly == nil || createReadonly.Name() != "create-readonly" {
+		t.Fatalf("user create-readonly command not found: cmd=%v err=%v", createReadonly, err)
 	}
-	if !strings.Contains(grant.Long, "raw repository") {
-		t.Fatalf("share grant help should mention raw repository scope, got %q", grant.Long)
+	if !strings.Contains(createReadonly.Long, "raw repository") {
+		t.Fatalf("user create-readonly help should mention raw repository scope, got %q", createReadonly.Long)
 	}
-	if !strings.Contains(grant.Long, "overlapping path access") {
-		t.Fatalf("share grant help should mention exclusive preflight, got %q", grant.Long)
+	if !strings.Contains(createReadonly.Long, "overlapping path access") {
+		t.Fatalf("user create-readonly help should mention exclusive preflight, got %q", createReadonly.Long)
 	}
 }
 
-func TestShareGrantDryRunAuditIncludesTargetsWithoutSecrets(t *testing.T) {
+func TestUserCreateReadonlyDryRunAuditIncludesTargetsWithoutSecrets(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -48,8 +48,8 @@ func TestShareGrantDryRunAuditIncludesTargetsWithoutSecrets(t *testing.T) {
 	defer server.Close()
 
 	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
-	cfgPath := writeShareAuditConfig(t, server.URL, auditPath)
-	out, err := executeCommandForOutput(newShareGrantCmd(),
+	cfgPath := writeReadonlyUserAuditConfig(t, server.URL, auditPath)
+	out, err := executeCommandForOutput(newUserCreateReadonlyCmd(),
 		"--config", cfgPath,
 		"--repo", "raw-hosted",
 		"--path", "/team-a/",
@@ -67,7 +67,7 @@ func TestShareGrantDryRunAuditIncludesTargetsWithoutSecrets(t *testing.T) {
 	}
 	text := string(data)
 	for _, want := range []string{
-		`"command":"share grant"`,
+		`"command":"user create-readonly"`,
 		`"dryRun":true`,
 		`"result":"success"`,
 		`"targetRepo":"raw-hosted"`,
@@ -89,7 +89,7 @@ func TestShareGrantDryRunAuditIncludesTargetsWithoutSecrets(t *testing.T) {
 	}
 }
 
-func writeShareAuditConfig(t *testing.T, baseURL, auditPath string) string {
+func writeReadonlyUserAuditConfig(t *testing.T, baseURL, auditPath string) string {
 	t.Helper()
 	cfg := config.Default()
 	cfg.Nexus.BaseURL = baseURL

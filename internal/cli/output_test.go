@@ -60,7 +60,7 @@ func TestOutputFlagDefaultsToText(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd()},
 		{"blobstore ensure", newBlobStoreEnsureCmd()},
 		{"guest protect", newGuestProtectCmd()},
-		{"share grant", newShareGrantCmd()},
+		{"user create-readonly", newUserCreateReadonlyCmd()},
 		{"repo lifecycle run", newLifecycleActionCmd(true)},
 	}
 	for _, tt := range tests {
@@ -86,7 +86,7 @@ func TestDryRunWriteCommandsExposeOutputFlag(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd()},
 		{"blobstore ensure", newBlobStoreEnsureCmd()},
 		{"guest protect", newGuestProtectCmd()},
-		{"share grant", newShareGrantCmd()},
+		{"user create-readonly", newUserCreateReadonlyCmd()},
 		{"repo lifecycle run", newLifecycleActionCmd(true)},
 	}
 	for _, tt := range tests {
@@ -110,7 +110,7 @@ func TestWriteCommandsExposeYesFlag(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd()},
 		{"blobstore ensure", newBlobStoreEnsureCmd()},
 		{"guest protect", newGuestProtectCmd()},
-		{"share grant", newShareGrantCmd()},
+		{"user create-readonly", newUserCreateReadonlyCmd()},
 		{"repo lifecycle run", newLifecycleActionCmd(true)},
 	}
 	for _, tt := range tests {
@@ -139,7 +139,7 @@ func TestWriteCommandsRequireYesForRealRunsBeforeConfig(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd(), nil},
 		{"blobstore ensure", newBlobStoreEnsureCmd(), []string{"--name", "default", "--path", "/nexus-data/blobs/default"}},
 		{"guest protect", newGuestProtectCmd(), nil},
-		{"share grant", newShareGrantCmd(), []string{"--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com"}},
+		{"user create-readonly", newUserCreateReadonlyCmd(), []string{"--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com"}},
 		{"repo lifecycle run", newLifecycleActionCmd(true), []string{"--repo", "raw-hosted"}},
 	}
 	for _, tt := range tests {
@@ -180,7 +180,7 @@ func TestWriteCommandsWithYesBypassConfirmationGate(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd(), []string{"--yes"}},
 		{"blobstore ensure", newBlobStoreEnsureCmd(), []string{"--name", "default", "--path", "/nexus-data/blobs/default", "--yes"}},
 		{"guest protect", newGuestProtectCmd(), []string{"--yes"}},
-		{"share grant", newShareGrantCmd(), []string{"--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com", "--yes"}},
+		{"user create-readonly", newUserCreateReadonlyCmd(), []string{"--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com", "--yes"}},
 		{"repo lifecycle run", newLifecycleActionCmd(true), []string{"--repo", "raw-hosted", "--yes"}},
 	}
 	for _, tt := range tests {
@@ -213,7 +213,7 @@ func TestWriteCommandsDryRunDoNotRequireYes(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd(), []string{"--dry-run"}},
 		{"blobstore ensure", newBlobStoreEnsureCmd(), []string{"--name", "default", "--path", "/nexus-data/blobs/default", "--dry-run"}},
 		{"guest protect", newGuestProtectCmd(), []string{"--dry-run"}},
-		{"share grant", newShareGrantCmd(), []string{"--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com", "--dry-run"}},
+		{"user create-readonly", newUserCreateReadonlyCmd(), []string{"--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com", "--dry-run"}},
 		{"repo lifecycle run", newLifecycleActionCmd(true), []string{"--repo", "raw-hosted", "--dry-run"}},
 	}
 	for _, tt := range tests {
@@ -479,7 +479,7 @@ func TestDryRunWriteCommandsJSONPlanOutput(t *testing.T) {
 		{"blobstore apply", newBlobStoreApplyCmd(), []string{"--config", cfgPath, "--dry-run", "--output", "json"}, "blobstore apply"},
 		{"blobstore ensure", newBlobStoreEnsureCmd(), []string{"--config", cfgPath, "--name", "default", "--path", "/nexus-data/blobs/default", "--dry-run", "--output", "json"}, "blobstore ensure"},
 		{"guest protect", newGuestProtectCmd(), []string{"--config", cfgPath, "--dry-run", "--output", "json"}, "guest protect"},
-		{"share grant", newShareGrantCmd(), []string{"--config", cfgPath, "--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com", "--dry-run", "--output", "json"}, "share grant"},
+		{"user create-readonly", newUserCreateReadonlyCmd(), []string{"--config", cfgPath, "--repo", "raw-hosted", "--path", "/team-a/", "--user", "team-a-user", "--email", "team-a@example.com", "--dry-run", "--output", "json"}, "user create-readonly"},
 		{"repo lifecycle run", newLifecycleActionCmd(true), []string{"--config", cfgPath, "--repo", "raw-hosted", "--dry-run", "--output", "json"}, "repo lifecycle run"},
 	}
 	for _, tt := range tests {

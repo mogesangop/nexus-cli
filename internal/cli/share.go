@@ -11,17 +11,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewShareCmd builds the `share` command tree.
-func NewShareCmd() *cobra.Command {
+// NewUserCmd builds the `user` command tree.
+func NewUserCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "share",
-		Short: "Grant a named user exclusive browse+download access to a raw repository directory",
+		Use:   "user",
+		Short: "Create and manage Nexus users",
 	}
-	cmd.AddCommand(newShareGrantCmd())
+	cmd.AddCommand(newUserCreateReadonlyCmd())
 	return cmd
 }
 
-func newShareGrantCmd() *cobra.Command {
+func newUserCreateReadonlyCmd() *cobra.Command {
 	var (
 		cfgPath        string
 		repo, path     string
@@ -34,8 +34,8 @@ func newShareGrantCmd() *cobra.Command {
 		dryRun, yes    bool
 	)
 	c := &cobra.Command{
-		Use:   "grant",
-		Short: "Create a path-scoped browse+read grant for a user (one-shot, idempotent)",
+		Use:   "create-readonly",
+		Short: "Create a user with path-scoped browse+read access (one-shot, idempotent)",
 		Long: "Creates a content selector, a repository-content-selector privilege, a " +
 			"role, and a user, wiring them together so the user can browse and download " +
 			"under the given path in a raw repository. Before creating anything, it checks " +
@@ -45,11 +45,11 @@ func newShareGrantCmd() *cobra.Command {
 			"existing user is an error (the password is never reset). Partial progress is " +
 			"NOT rolled back — re-running is safe.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithJSONErrors(cmd, output, "share grant", func() error {
+			return runWithJSONErrors(cmd, output, "user create-readonly", func() error {
 				if err := validateWriteOutput(output, dryRun); err != nil {
 					return err
 				}
-				if err := requireWriteConfirmation("share grant", dryRun, yes); err != nil {
+				if err := requireWriteConfirmation("user create-readonly", dryRun, yes); err != nil {
 					return err
 				}
 				cfg, err := loadConfig(cfgPath)
@@ -74,16 +74,16 @@ func newShareGrantCmd() *cobra.Command {
 				}
 				res, err := share.NewGrantor().Grant(client, req)
 				if err != nil {
-					writeShareAudit(cfg, "share grant", dryRun, "failed", res, err)
+					writeReadonlyUserAudit(cfg, "user create-readonly", dryRun, "failed", res, err)
 					return err
 				}
-				writeShareAudit(cfg, "share grant", dryRun, "success", res, nil)
+				writeReadonlyUserAudit(cfg, "user create-readonly", dryRun, "success", res, nil)
 				if dryRun && isJSONOutput(output) {
-					return writeDryRunResponse(cmd, "share grant", map[string]any{
-						"share": res,
-					}, shareGrantChanges(res), nil)
+					return writeDryRunResponse(cmd, "user create-readonly", map[string]any{
+						"user": res,
+					}, readonlyUserChanges(res), nil)
 				}
-				printShareResult(res, dryRun)
+				printReadonlyUserResult(res, dryRun)
 				return nil
 			})
 		},
@@ -98,7 +98,7 @@ func newShareGrantCmd() *cobra.Command {
 	c.Flags().StringVar(&format, "format", "", "repository format (auto-detected if omitted)")
 	c.Flags().IntVar(&passwordLength, "password-length", 24, "generated password length")
 	c.Flags().BoolVar(&dryRun, "dry-run", false, "compute and print the plan without applying changes")
-	c.Flags().BoolVar(&yes, "yes", false, "confirm creating share access resources")
+	c.Flags().BoolVar(&yes, "yes", false, "confirm creating a read-only user and its access resources")
 	addOutputFlag(c, &output)
 	_ = c.MarkFlagRequired("repo")
 	_ = c.MarkFlagRequired("path")
@@ -107,7 +107,7 @@ func newShareGrantCmd() *cobra.Command {
 	return c
 }
 
-func printShareResult(res *share.Result, dryRun bool) {
+func printReadonlyUserResult(res *share.Result, dryRun bool) {
 	fmt.Printf("repo:      %s (%s)\n", res.Repo, res.Format)
 	fmt.Printf("path:      %s\n", res.Path)
 	fmt.Printf("selector:  %s  [%s]\n", res.Selector, createdOrReuse(res.SelectorCreated, dryRun))
@@ -133,7 +133,7 @@ func createdOrReuse(created, dryRun bool) string {
 	return "reused"
 }
 
-func shareGrantChanges(res *share.Result) []responseChange {
+func readonlyUserChanges(res *share.Result) []responseChange {
 	if res == nil {
 		return []responseChange{}
 	}
@@ -145,9 +145,9 @@ func shareGrantChanges(res *share.Result) []responseChange {
 	}
 }
 
-// writeShareAudit emits one JSONL audit record for a share grant. The password
+// writeReadonlyUserAudit emits one JSONL audit record for a read-only user creation. The password
 // is never recorded (audit invariant #3). Audit write failures are non-fatal.
-func writeShareAudit(cfg *config.Config, command string, dryRun bool, result string, res *share.Result, runErr error) {
+func writeReadonlyUserAudit(cfg *config.Config, command string, dryRun bool, result string, res *share.Result, runErr error) {
 	rec := audit.Record{
 		Command:      command,
 		DryRun:       dryRun,

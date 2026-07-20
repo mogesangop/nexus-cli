@@ -40,7 +40,7 @@
 | `guest check` | 校验 guest / anonymous 权限是否符合配置。 | 只读 | 是 | 不适用 | 不需要 | 支持 `--output json`。 |
 | `guest protect` | 按配置收敛 guest / anonymous 权限。 | 高风险写 | 否 | `--dry-run --output json` | `--yes` | 修改 Nexus 权限和角色绑定。 |
 | `guest sync` | `guest protect` 的兼容别名。 | 高风险写 | 否 | `--dry-run` | `--yes` | 已废弃但保留兼容。 |
-| `share grant` | 为指定用户创建 raw 仓库目录级访问授权。 | 高风险写 | 否 | `--dry-run --output json` | `--yes` | 创建 selector、privilege、role、user；真实执行会生成一次性密码。 |
+| `user create-readonly` | 创建拥有 raw 仓库目录级只读访问权限的用户。 | 高风险写 | 否 | `--dry-run --output json` | `--yes` | 创建 user、selector、privilege、role；真实执行会生成一次性密码。 |
 | `ha status` | 查看 HA 节点健康和复制延迟。 | 只读 | 是 | 不适用 | 不需要 | 读取 HA 状态文件并检查节点。 |
 | `ha health` | 对 HA 两节点执行 API 健康检查。 | 只读 | 是 | 不适用 | 不需要 | 支持 `--output json`。 |
 | `ha sync --once` | 执行配置中的 blob 和 metadata 同步命令一次。 | 高风险写 | 否 | 不支持 | `--once` | 会执行外部命令并更新 HA 状态文件；由 `--once` 明确触发。 |
@@ -61,14 +61,14 @@
 
 - 能力清单、JSON 响应和审计日志不得包含 Nexus 管理员密码。
 - 能力清单、JSON 响应和审计日志不得包含 Authorization header。
-- `share grant` 真实执行生成的用户密码只能作为一次性结果返回给调用方，不能写入审计日志。
+- `user create-readonly` 真实执行生成的用户密码只能作为一次性结果返回给调用方，不能写入审计日志。
 - AI 在报错、总结或日志中不得复述环境变量值。
 
 ## 6. AI-001 验收对照
 
 | 验收项 | 覆盖位置 |
 | --- | --- |
-| 文档列出核心命令：health、repo、blobstore、guest、share、repo lifecycle、ha。 | 第 3 节命令能力清单。 |
+| 文档列出核心命令：health、repo、blobstore、guest、user、repo lifecycle、ha。 | 第 3 节命令能力清单。 |
 | 每个命令标明风险等级：只读、低风险写、高风险写。 | 第 3 节“风险等级”列。 |
 | 每个写操作标明是否支持 `--dry-run`。 | 第 3 节“dry-run / 预览”列。 |
 | 每个真实写操作标明需要 `--yes` 或专用确认参数。 | 第 3 节“真实执行确认”列。 |

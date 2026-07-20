@@ -41,7 +41,7 @@ nexus-cli ha health --config config.yaml --output json
 nexus-cli repo apply --config config.yaml --dry-run --output json
 nexus-cli blobstore apply --config config.yaml --dry-run --output json
 nexus-cli guest protect --config config.yaml --dry-run --output json
-nexus-cli share grant --config config.yaml \
+nexus-cli user create-readonly --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -70,7 +70,7 @@ AI 应向用户说明：
 nexus-cli repo apply --config config.yaml --yes
 nexus-cli blobstore apply --config config.yaml --yes
 nexus-cli guest protect --config config.yaml --yes
-nexus-cli share grant --config config.yaml \
+nexus-cli user create-readonly --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -165,7 +165,7 @@ nexus-cli guest check --config config.yaml --output json
 适用场景：用户希望某个用户只能访问 raw 仓库下的一个目录。
 
 ```sh
-nexus-cli share grant --config config.yaml \
+nexus-cli user create-readonly --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
@@ -179,7 +179,7 @@ nexus-cli share grant --config config.yaml \
 AI 应说明将创建或复用的 selector、privilege、role 和 user。用户确认后执行：
 
 ```sh
-nexus-cli share grant --config config.yaml \
+nexus-cli user create-readonly --config config.yaml \
   --repo devops-prod-generic \
   --path /team-a/ \
   --user alice.team-a \
