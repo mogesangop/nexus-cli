@@ -49,7 +49,7 @@ Entry point `cmd/nexus-cli/main.go` is a thin shim that calls
 
 ### Three invariants that shape the design
 
-1. **Policy precedence: `deny > readOnly > browseRead > defaultPolicy`.**
+1. **Policy precedence: `protected > downloadOnly > public > defaultPolicy`.**
    Implemented in `guest/planner.go` `PolicyFor`. Changing this order changes
    security behavior — never reorder casually.
 

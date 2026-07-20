@@ -16,10 +16,10 @@ import (
 type Policy string
 
 const (
-	PolicyDeny       Policy = "deny"
-	PolicyReadOnly   Policy = "readOnly"
-	PolicyBrowseRead Policy = "browseRead"
-	PolicyNone       Policy = "none"
+	PolicyProtected    Policy = "protected"
+	PolicyDownloadOnly Policy = "downloadOnly"
+	PolicyPublic       Policy = "public"
+	PolicyNone         Policy = "none" // legacy defaultPolicy: none
 )
 
 // TargetPermission is the desired permission for one repository.
@@ -40,16 +40,16 @@ type TargetPrivilege struct {
 
 // SyncPlan is the computed set of changes between config and Nexus state.
 type SyncPlan struct {
-	TargetRole             string
-	RepositoriesTotal      int
-	BrowseReadRepositories []string
-	ReadOnlyRepositories   []string
-	DenyRepositories       []string
-	PrivilegesToCreate     []TargetPrivilege
-	PrivilegesToSkip       []string
-	PrivilegesToRemove     []string
-	RemovedRiskyPrivileges []string
-	Warnings               []string
+	TargetRole               string
+	RepositoriesTotal        int
+	PublicRepositories       []string
+	DownloadOnlyRepositories []string
+	ProtectedRepositories    []string
+	PrivilegesToCreate       []TargetPrivilege
+	PrivilegesToSkip         []string
+	PrivilegesToRemove       []string
+	RemovedRiskyPrivileges   []string
+	Warnings                 []string
 }
 
 // Planner computes target permissions and a SyncPlan.
@@ -66,35 +66,63 @@ func NewPlanner(cfg *config.Config) *Planner {
 	}
 }
 
-// PolicyFor resolves the policy for a single repository per PRD 10:
-// deny > readOnly > browseRead > defaultPolicy.
+// PolicyFor resolves the policy for a single repository. Protected always wins
+// so an accidental duplicate entry can never grant guest access.
 func (p *Planner) PolicyFor(repo string) Policy {
+	if p.usesLegacyPolicies() {
+		return p.legacyPolicyFor(repo)
+	}
+	if matchesAny(p.cfg.GuestAccess.Protected.Repositories, repo) {
+		return PolicyProtected
+	}
+	if matchesAny(p.cfg.GuestAccess.DownloadOnly.Repositories, repo) {
+		return PolicyDownloadOnly
+	}
+	if matchesAny(p.cfg.GuestAccess.Public.Repositories, repo) {
+		return PolicyPublic
+	}
+	switch p.cfg.GuestAccess.DefaultPolicy {
+	case "protected":
+		return PolicyProtected
+	default:
+		return PolicyPublic
+	}
+}
+
+func (p *Planner) usesLegacyPolicies() bool {
+	g := p.cfg.GuestAccess
+	return len(g.BrowseRead.IncludeRepositories) > 0 || len(g.BrowseRead.ExcludeRepositories) > 0 ||
+		len(g.ReadOnly.Repositories) > 0 || len(g.Deny.Repositories) > 0 ||
+		g.DefaultPolicy == "browseRead" || g.DefaultPolicy == "none"
+}
+
+func (p *Planner) legacyPolicyFor(repo string) Policy {
 	if contains(p.cfg.GuestAccess.Deny.Repositories, repo) {
-		return PolicyDeny
+		return PolicyProtected
 	}
 	if contains(p.cfg.GuestAccess.ReadOnly.Repositories, repo) {
-		return PolicyReadOnly
+		return PolicyDownloadOnly
 	}
 	excluded := contains(p.cfg.GuestAccess.BrowseRead.ExcludeRepositories, repo)
 	included := matchInclude(p.cfg.GuestAccess.BrowseRead.IncludeRepositories, repo)
 	if included && !excluded {
-		return PolicyBrowseRead
+		return PolicyPublic
 	}
 	switch p.cfg.GuestAccess.DefaultPolicy {
 	case "none":
 		return PolicyNone
 	default:
-		return PolicyBrowseRead
+		return PolicyPublic
 	}
 }
 
 // ActionsFor returns the Nexus actions granted for a policy.
 func (p *Planner) ActionsFor(pol Policy) []string {
 	switch pol {
-	case PolicyBrowseRead:
-		return cloneStrings(p.cfg.GuestAccess.Actions.BrowseRead)
-	case PolicyReadOnly:
-		return cloneStrings(p.cfg.GuestAccess.Actions.ReadOnly)
+	case PolicyPublic:
+		return []string{"browse", "read"}
+	case PolicyDownloadOnly:
+		return []string{"read"}
 	default:
 		return nil
 	}
@@ -105,7 +133,7 @@ func (p *Planner) ComputeTargets(repos []nexus.Repository) []TargetPermission {
 	out := make([]TargetPermission, 0, len(repos))
 	for _, r := range repos {
 		pol := p.PolicyFor(r.Name)
-		if pol == PolicyDeny || pol == PolicyNone {
+		if pol == PolicyProtected || pol == PolicyNone {
 			continue
 		}
 		out = append(out, TargetPermission{
@@ -190,12 +218,12 @@ func (p *Planner) Build(repos []nexus.Repository, existingManaged, existingAll [
 	}
 	for _, r := range repos {
 		switch p.PolicyFor(r.Name) {
-		case PolicyBrowseRead:
-			plan.BrowseReadRepositories = append(plan.BrowseReadRepositories, r.Name)
-		case PolicyReadOnly:
-			plan.ReadOnlyRepositories = append(plan.ReadOnlyRepositories, r.Name)
-		case PolicyDeny:
-			plan.DenyRepositories = append(plan.DenyRepositories, r.Name)
+		case PolicyPublic:
+			plan.PublicRepositories = append(plan.PublicRepositories, r.Name)
+		case PolicyDownloadOnly:
+			plan.DownloadOnlyRepositories = append(plan.DownloadOnlyRepositories, r.Name)
+		case PolicyProtected:
+			plan.ProtectedRepositories = append(plan.ProtectedRepositories, r.Name)
 		}
 	}
 	for _, w := range p.cfg.GuestAccess.WarnPrivileges {
@@ -207,9 +235,9 @@ func (p *Planner) Build(repos []nexus.Repository, existingManaged, existingAll [
 			break
 		}
 	}
-	sort.Strings(plan.BrowseReadRepositories)
-	sort.Strings(plan.ReadOnlyRepositories)
-	sort.Strings(plan.DenyRepositories)
+	sort.Strings(plan.PublicRepositories)
+	sort.Strings(plan.DownloadOnlyRepositories)
+	sort.Strings(plan.ProtectedRepositories)
 	return plan
 }
 

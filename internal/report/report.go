@@ -14,18 +14,18 @@ import (
 
 // SyncReport summarizes a guest protection run (dry-run or applied).
 type SyncReport struct {
-	DryRun                 bool
-	TargetRole             string
-	RepositoriesTotal      int
-	BrowseReadRepositories []string
-	ReadOnlyRepositories   []string
-	DenyRepositories       []string
-	PrivilegesToCreate     []string
-	PrivilegesToSkip       []string
-	PrivilegesToRemove     []string
-	RemovedRiskyPrivileges []string
-	Warnings               []string
-	Errors                 []string
+	DryRun                   bool
+	TargetRole               string
+	RepositoriesTotal        int
+	PublicRepositories       []string
+	DownloadOnlyRepositories []string
+	ProtectedRepositories    []string
+	PrivilegesToCreate       []string
+	PrivilegesToSkip         []string
+	PrivilegesToRemove       []string
+	RemovedRiskyPrivileges   []string
+	Warnings                 []string
+	Errors                   []string
 }
 
 // CheckReport summarizes a guest check.
@@ -46,20 +46,20 @@ func PrintSync(r *SyncReport) {
 	}
 	fmt.Println("Target Role:")
 	fmt.Printf("  %s\n", r.TargetRole)
-	printList("Browse + Read Repositories", r.BrowseReadRepositories)
-	printList("Read Only Repositories", r.ReadOnlyRepositories)
-	printList("Protected / Denied Repositories", r.DenyRepositories)
+	printList("Public Repositories", r.PublicRepositories)
+	printList("Download-only Repositories", r.DownloadOnlyRepositories)
+	printList("Protected Repositories", r.ProtectedRepositories)
 	printList("Privileges To Create", r.PrivilegesToCreate)
 	printList("Skipped Privileges", r.PrivilegesToSkip)
 	printList("Privileges To Remove", r.PrivilegesToRemove)
 	printList("Removed Risky Privileges", r.RemovedRiskyPrivileges)
 	printList("Warnings", r.Warnings)
 	printList("Failures", r.Errors)
-	fmt.Printf("Summary:\n  repositories total: %d\n  browse+read: %d\n  read-only: %d\n  denied: %d\n  created privileges: %d\n  skipped privileges: %d\n  removed risky privileges: %d\n",
+	fmt.Printf("Summary:\n  repositories total: %d\n  public: %d\n  download-only: %d\n  protected: %d\n  created privileges: %d\n  skipped privileges: %d\n  removed risky privileges: %d\n",
 		r.RepositoriesTotal,
-		len(r.BrowseReadRepositories),
-		len(r.ReadOnlyRepositories),
-		len(r.DenyRepositories),
+		len(r.PublicRepositories),
+		len(r.DownloadOnlyRepositories),
+		len(r.ProtectedRepositories),
 		len(r.PrivilegesToCreate),
 		len(r.PrivilegesToSkip),
 		len(r.RemovedRiskyPrivileges),
@@ -118,20 +118,20 @@ func syncReportText(r *SyncReport) string {
 		b.WriteString("Guest Access Protection Completed\n")
 	}
 	b.WriteString("Target Role:\n  " + r.TargetRole + "\n")
-	writeList(&b, "Browse + Read Repositories", r.BrowseReadRepositories)
-	writeList(&b, "Read Only Repositories", r.ReadOnlyRepositories)
-	writeList(&b, "Protected / Denied Repositories", r.DenyRepositories)
+	writeList(&b, "Public Repositories", r.PublicRepositories)
+	writeList(&b, "Download-only Repositories", r.DownloadOnlyRepositories)
+	writeList(&b, "Protected Repositories", r.ProtectedRepositories)
 	writeList(&b, "Privileges To Create", r.PrivilegesToCreate)
 	writeList(&b, "Skipped Privileges", r.PrivilegesToSkip)
 	writeList(&b, "Privileges To Remove", r.PrivilegesToRemove)
 	writeList(&b, "Removed Risky Privileges", r.RemovedRiskyPrivileges)
 	writeList(&b, "Warnings", r.Warnings)
 	writeList(&b, "Failures", r.Errors)
-	fmt.Fprintf(&b, "Summary:\n  repositories total: %d\n  browse+read: %d\n  read-only: %d\n  denied: %d\n  created privileges: %d\n  skipped privileges: %d\n  removed risky privileges: %d\n",
+	fmt.Fprintf(&b, "Summary:\n  repositories total: %d\n  public: %d\n  download-only: %d\n  protected: %d\n  created privileges: %d\n  skipped privileges: %d\n  removed risky privileges: %d\n",
 		r.RepositoriesTotal,
-		len(r.BrowseReadRepositories),
-		len(r.ReadOnlyRepositories),
-		len(r.DenyRepositories),
+		len(r.PublicRepositories),
+		len(r.DownloadOnlyRepositories),
+		len(r.ProtectedRepositories),
 		len(r.PrivilegesToCreate),
 		len(r.PrivilegesToSkip),
 		len(r.RemovedRiskyPrivileges),

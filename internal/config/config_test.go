@@ -36,8 +36,8 @@ func TestDefaultIncludesDevopsRawRepository(t *testing.T) {
 		t.Fatalf("raw repositories = %d, want 1", len(c.Repositories.Raw))
 	}
 	raw := c.Repositories.Raw[0]
-	if raw.Name != "devops-prod-generic" {
-		t.Fatalf("raw repository name = %q, want devops-prod-generic", raw.Name)
+	if raw.Name != "protected-repo-example" {
+		t.Fatalf("raw repository name = %q, want protected-repo-example", raw.Name)
 	}
 	if raw.Storage.BlobStoreName != "default" || raw.Storage.WritePolicy != "allow_once" {
 		t.Fatalf("unexpected raw storage defaults: %+v", raw.Storage)
@@ -51,11 +51,11 @@ func TestDefaultIncludesDevopsRawRepository(t *testing.T) {
 	if len(c.BlobStores.File) != 1 || c.BlobStores.File[0].Name != "default" {
 		t.Fatalf("file blob stores = %#v, want default", c.BlobStores.File)
 	}
-	if got := c.GuestAccess.ReadOnly.Repositories; len(got) != 0 {
-		t.Fatalf("readOnly repositories = %#v, want empty", got)
+	if got := c.GuestAccess.DownloadOnly.Repositories; len(got) != 0 {
+		t.Fatalf("downloadOnly repositories = %#v, want empty", got)
 	}
-	if got := c.GuestAccess.Deny.Repositories; len(got) != 1 || got[0] != "devops-prod-generic" {
-		t.Fatalf("deny repositories = %#v, want devops-prod-generic", got)
+	if got := c.GuestAccess.Protected.Repositories; len(got) != 1 || got[0] != "protected-repo-example" {
+		t.Fatalf("protected repositories = %#v, want protected-repo-example", got)
 	}
 }
 
@@ -113,7 +113,7 @@ func TestLoadHAFailoverRequireFencingDefaultsTrue(t *testing.T) {
   timeoutSeconds: 30
 guestAccess:
   roleName: "role_guest_repository_access"
-  defaultPolicy: "browseRead"
+  defaultPolicy: "public"
 privilegeNaming:
   prefix: "priv_guest"
   separator: "_"
@@ -191,6 +191,39 @@ func TestLoad_RoundTrip(t *testing.T) {
 	}
 	if loaded.GuestAccess.RoleName != c.GuestAccess.RoleName {
 		t.Errorf("roleName mismatch")
+	}
+}
+
+func TestLoad_LegacyGuestAccessPoliciesRemainSupported(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "legacy.yaml")
+	data := `nexus:
+  baseUrl: "http://nexus.example.com"
+  username: "admin"
+  passwordEnv: "NEXUS_ADMIN_PASSWORD"
+guestAccess:
+  roleName: "role_guest_repository_access"
+  defaultPolicy: "browseRead"
+  browseRead:
+    includeRepositories: ["*"]
+  deny:
+    repositories: ["legacy-protected"]
+privilegeNaming:
+  prefix: "priv_guest"
+audit:
+  logPath: "./logs/audit.log"
+report:
+  outputDir: "./reports"
+`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load legacy config: %v", err)
+	}
+	if got := cfg.GuestAccess.Deny.Repositories; len(got) != 1 || got[0] != "legacy-protected" {
+		t.Fatalf("legacy deny repositories = %#v", got)
 	}
 }
 

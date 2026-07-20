@@ -7,8 +7,9 @@
 nexus-cli 第一版本 PRD
 
 > 后续需求变更（当前实现以此为准）：
-> - “受保护仓库”现在表示 guest / anonymous 完全不可见、不可通过精确 URL 下载，应配置到 `guestAccess.deny.repositories`。
-> - `guestAccess.readOnly.repositories` 仅保留为高级场景：UI 不可见但精确 URL 可下载，不再代表“受保护仓库”。
+> - “受保护仓库”表示 guest / anonymous 完全不可见、不可通过精确 URL 下载，应配置到 `guestAccess.protected.repositories`。
+> - `guestAccess.downloadOnly.repositories` 仅保留为高级场景：UI 不可见但精确 URL 可下载，不代表“受保护仓库”。
+> - 旧的 `browseRead` / `readOnly` / `deny` 字段继续兼容读取；新配置统一使用 `public` / `downloadOnly` / `protected`。
 > - 推荐命令为 `nexus-cli guest protect`；`nexus-cli guest sync` 仅作为兼容别名保留。
 > - `user create-readonly` 仅支持 raw 仓库，并在创建用户前检查其他非 admin 用户是否已有同仓库或重叠目录访问。
 
@@ -19,7 +20,7 @@ nexus-cli 第一版本 PRD
 版本	V1.0
 目标 Nexus 版本	Nexus Repository 3.76
 主要管理对象	Anonymous / Guest 访客权限
-主要仓库	devops-prod-generic
+主要仓库	protected-repo-example
 第一版本定位	解决访客通过 Nexus UI 看到过多仓库和制品的问题
 推荐开发语言	Go
 推荐 CLI 框架	Cobra + Viper
@@ -31,8 +32,8 @@ nexus-cli 第一版本 PRD
 
 nexus-cli 第一版本不做复杂的系统账号管理，优先解决访客权限治理问题：
 
-让访客在 Nexus UI 中看不到 devops-prod-generic，
-但仍然可以通过精确 URL 下载 devops-prod-generic 中的制品；
+让访客在 Nexus UI 中看不到 protected-repo-example，
+但仍然可以通过精确 URL 下载 protected-repo-example 中的制品；
 同时其他允许公开浏览的仓库仍然可以在 Nexus UI 中正常看到。
 
 第一版本核心命令建议只做：
@@ -50,12 +51,12 @@ nexus-cli config init
 
 当前 Nexus 中存在多个仓库，至少包括：
 
-devops-prod-generic
+protected-repo-example
 
-其中 devops-prod-generic 是生产制品 Raw 仓库，用于存放各系统投产制品，例如：
+其中 protected-repo-example 是生产制品 Raw 仓库，用于存放各系统投产制品，例如：
 
-/repository/devops-prod-generic/ades_xxxxxxx_xxxx/20260702/app.tar
-/repository/devops-prod-generic/devops_xxxxx_xxxxx/20260702/app.tar
+/repository/protected-repo-example/ades_xxxxxxx_xxxx/20260702/app.tar
+/repository/protected-repo-example/devops_xxxxx_xxxxx/20260702/app.tar
 
 当前问题是：
 
@@ -70,7 +71,7 @@ devops-prod-generic
 期望达到：
 
 仓库	Nexus UI 是否可见	curl 精确 URL 是否可下载
-devops-prod-generic	不可见	可以
+protected-repo-example	不可见	可以
 其他允许展示仓库	可见	可以
 明确禁止仓库	不可见	不可下载
 
@@ -83,18 +84,18 @@ Nexus 权限模型是 累加授权模型，不是拒绝模型。
 也就是说，Nexus 不支持：
 
 nx-repository-view-*-*-browse
-但排除 devops-prod-generic
+但排除 protected-repo-example
 
 因此不能通过一个通配权限完成：
 
-所有仓库可浏览，只有 devops-prod-generic 不可浏览
+所有仓库可浏览，只有 protected-repo-example 不可浏览
 
 正确做法是：
 
 移除全局 browse 权限；
 读取 Nexus 全部仓库；
 对允许展示的仓库逐个创建 browse + read 权限；
-对 devops-prod-generic 只创建 read 权限；
+对 protected-repo-example 只创建 read 权限；
 把这些权限统一绑定到访客角色。
 
 ⸻
@@ -108,7 +109,7 @@ nx-repository-view-*-*-browse
 编号	目标
 G01	自动读取 Nexus 全部仓库列表
 G02	自动为访客角色生成仓库级权限
-G03	对 devops-prod-generic 只授予 read，不授予 browse
+G03	对 protected-repo-example 只授予 read，不授予 browse
 G04	对其他允许仓库授予 browse + read
 G05	自动移除访客角色中的高危全局权限
 G06	支持 dry-run，先预览变更计划
@@ -150,7 +151,7 @@ Nexus 管理员	不想手工逐仓库创建 Privilege
 
 如果 Nexus 有几十个仓库，要实现：
 
-除了 devops-prod-generic 外，其他仓库都 browse + read
+除了 protected-repo-example 外，其他仓库都 browse + read
 
 就必须逐仓库创建权限。
 
@@ -169,7 +170,7 @@ Nexus 管理员	不想手工逐仓库创建 Privilege
 
 不能配置：
 
-nx-repository-view-*-*-browse except devops-prod-generic
+nx-repository-view-*-*-browse except protected-repo-example
 
 只能用白名单方式逐仓库授权。
 
@@ -265,7 +266,7 @@ nexus-cli repo list --config config.yaml
 
 Repository List
 Name                  Format     Type
-devops-prod-generic   raw        hosted
+protected-repo-example   raw        hosted
 maven-public          maven2     group
 npm-public            npm        group
 raw-public            raw        hosted
@@ -302,7 +303,7 @@ Guest Access Sync Plan
 Target Role:
   role_guest_repository_access
 Read Only Repositories:
-  - devops-prod-generic
+  - protected-repo-example
 Browse + Read Repositories:
   - maven-public
   - npm-public
@@ -315,7 +316,7 @@ Risky Privileges To Remove:
   - nx-all
   - nx-admin
 Privileges To Create:
-  - priv_guest_raw_devops_prod_generic_read
+  - priv_guest_raw_protected_repo_example_read
   - priv_guest_maven2_maven_public_browse_read
   - priv_guest_npm_npm_public_browse_read
   - priv_guest_raw_raw_public_browse_read
@@ -350,7 +351,7 @@ Guest Access Sync Completed
 Target Role:
   role_guest_repository_access
 Created Privileges:
-  - priv_guest_raw_devops_prod_generic_read
+  - priv_guest_raw_protected_repo_example_read
   - priv_guest_maven2_maven_public_browse_read
   - priv_guest_npm_npm_public_browse_read
 Updated Role:
@@ -382,8 +383,8 @@ nexus-cli guest check --config config.yaml
 
 检查项	结果
 访客角色是否存在	PASS / FAIL
-devops-prod-generic 是否只有 read	PASS / FAIL
-devops-prod-generic 是否存在 browse	PASS / FAIL
+protected-repo-example 是否只有 read	PASS / FAIL
+protected-repo-example 是否存在 browse	PASS / FAIL
 其他允许仓库是否存在 browse + read	PASS / WARN / FAIL
 是否存在 nx-repository-view-*-*-browse	PASS / FAIL
 是否存在 nx-repository-view-*-*-*	PASS / FAIL
@@ -397,8 +398,8 @@ Guest Access Check Result
 Role:
   role_guest_repository_access
 PASS:
-  devops-prod-generic has read permission
-  devops-prod-generic has no browse permission
+  protected-repo-example has read permission
+  protected-repo-example has no browse permission
   no nx-admin
   no nx-all
 WARN:
@@ -447,26 +448,18 @@ guestAccess:
   enabled: true
   roleName: "role_guest_repository_access"
   anonymousUserId: "anonymous"
-  defaultPolicy: "browseRead"
+  defaultPolicy: "public"
   # 可选值：
-  # browseRead：默认其他仓库 browse + read
-  # none：默认不给权限，只按 includeRepositories 授权
-  browseRead:
-    includeRepositories:
-      - "*"
-    excludeRepositories:
-      - "devops-prod-generic"
-  readOnly:
+  # public：默认仓库 UI 可见且可下载
+  # protected：默认仓库 UI 不可见且不可下载，只按 public 显式授权
+  public:
     repositories:
-      - "devops-prod-generic"
-  deny:
+      - "*"
+  downloadOnly:
     repositories: []
-  actions:
-    browseRead:
-      - browse
-      - read
-    readOnly:
-      - read
+  protected:
+    repositories:
+      - "protected-repo-example"
   forbiddenPrivileges:
     - "nx-repository-view-*-*-browse"
     - "nx-repository-view-*-*-*"
@@ -508,11 +501,10 @@ nexus.insecureSkipTLSVerify	否	false	是否跳过 TLS 校验
 guestAccess.enabled	是	true	是否启用访客权限同步
 guestAccess.roleName	是	无	访客角色名
 guestAccess.anonymousUserId	否	anonymous	匿名用户 ID
-guestAccess.defaultPolicy	否	browseRead	默认仓库策略
-guestAccess.browseRead.includeRepositories	是	["*"]	允许 UI 浏览的仓库
-guestAccess.browseRead.excludeRepositories	否	[]	从 UI 浏览中排除的仓库
-guestAccess.readOnly.repositories	否	[]	只允许下载、不允许 UI 浏览的仓库
-guestAccess.deny.repositories	否	[]	完全禁止访客访问的仓库
+guestAccess.defaultPolicy	否	public	未列出仓库的默认策略（public / protected）
+guestAccess.public.repositories	否	["*"]	UI 可见且可下载的仓库
+guestAccess.downloadOnly.repositories	否	[]	只允许精确 URL 下载、不允许 UI 浏览的仓库
+guestAccess.protected.repositories	否	[]	完全禁止访客访问的仓库
 guestAccess.forbiddenPrivileges	是	内置默认值	高危权限
 guestAccess.warnPrivileges	否	["nx-search-read"]	警告权限
 
@@ -526,18 +518,18 @@ CLI 读取所有仓库后，对每个仓库计算目标权限。
 
 优先级从高到低：
 
-deny > readOnly > browseRead > defaultPolicy
+protected > downloadOnly > public > defaultPolicy
 
 ⸻
 
 10.2 权限分类表
 
 仓库命中规则	权限结果
-命中 deny.repositories	不授予任何权限
-命中 readOnly.repositories	read
-命中 browseRead.includeRepositories 且未命中 exclude	browse + read
-defaultPolicy = browseRead	browse + read
-defaultPolicy = none	不授予权限
+命中 protected.repositories	不授予任何权限
+命中 downloadOnly.repositories	read
+命中 public.repositories	browse + read
+defaultPolicy = public	browse + read
+defaultPolicy = protected	不授予权限
 
 ⸻
 
@@ -545,21 +537,19 @@ defaultPolicy = none	不授予权限
 
 配置：
 
-browseRead:
-  includeRepositories:
-    - "*"
-  excludeRepositories:
-    - "devops-prod-generic"
-readOnly:
+public:
   repositories:
-    - "devops-prod-generic"
-deny:
+    - "*"
+downloadOnly:
+  repositories:
+    - "protected-repo-example"
+protected:
   repositories:
     - "security-prod-generic"
 
 仓库列表：
 
-devops-prod-generic
+protected-repo-example
 maven-public
 npm-public
 security-prod-generic
@@ -567,10 +557,10 @@ security-prod-generic
 计算结果：
 
 仓库	命中规则	目标权限
-devops-prod-generic	readOnly	read
-maven-public	browseRead	browse + read
-npm-public	browseRead	browse + read
-security-prod-generic	deny	无权限
+protected-repo-example	downloadOnly	read
+maven-public	public	browse + read
+npm-public	public	browse + read
+security-prod-generic	protected	无权限
 
 ⸻
 
@@ -617,7 +607,7 @@ read
 
 仓库：
 
-devops-prod-generic
+protected-repo-example
 
 Format：
 
@@ -625,7 +615,7 @@ raw
 
 Privilege 名称：
 
-priv_guest_raw_devops_prod_generic_read
+priv_guest_raw_protected_repo_example_read
 
 Actions：
 
@@ -649,15 +639,15 @@ browse
 
 示例：
 
-devops-prod-generic
+protected-repo-example
 
 转换为：
 
-devops_prod_generic
+protected_repo_example
 
 最终权限名：
 
-priv_guest_raw_devops_prod_generic_read
+priv_guest_raw_protected_repo_example_read
 
 ⸻
 
@@ -694,7 +684,7 @@ priv_guest_
 
 例如：
 
-priv_guest_raw_devops_prod_generic_read
+priv_guest_raw_protected_repo_example_read
 priv_guest_maven2_maven_public_browse_read
 
 ⸻
@@ -773,7 +763,7 @@ Role	跳过	更新 privileges
 第一次执行：
 
 Created:
-  priv_guest_raw_devops_prod_generic_read
+  priv_guest_raw_protected_repo_example_read
   priv_guest_maven2_maven_public_browse_read
 Updated:
   role_guest_repository_access
@@ -781,7 +771,7 @@ Updated:
 第二次执行：
 
 Skipped:
-  priv_guest_raw_devops_prod_generic_read already exists
+  priv_guest_raw_protected_repo_example_read already exists
   priv_guest_maven2_maven_public_browse_read already exists
 No changes required.
 
@@ -840,7 +830,7 @@ errorMessage	错误信息
 
 16.3 示例
 
-{"timestamp":"2026-07-02T10:30:00+08:00","operator":"moge","command":"guest sync","nexusBaseUrl":"http://nexus.example.com","targetRole":"role_guest_repository_access","dryRun":false,"action":"sync","result":"success","createdPrivileges":["priv_guest_raw_devops_prod_generic_read"],"removedPrivileges":["nx-repository-view-*-*-browse"]}
+{"timestamp":"2026-07-02T10:30:00+08:00","operator":"moge","command":"guest sync","nexusBaseUrl":"http://nexus.example.com","targetRole":"role_guest_repository_access","dryRun":false,"action":"sync","result":"success","createdPrivileges":["priv_guest_raw_protected_repo_example_read"],"removedPrivileges":["nx-repository-view-*-*-browse"]}
 
 ⸻
 
@@ -929,7 +919,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 第一版本必须防止以下误操作：
 
 风险	防护
-给 devops-prod-generic 加 browse	配置中 readOnly 优先级高于 browseRead
+给 protected-repo-example 加 browse	配置中 protected 优先级最高，不授予任何访客权限
 保留全局 browse	默认 forbidden 并在 sync 中移除
 给访客加 admin 权限	默认 forbidden 并在 sync 中移除
 误删非托管权限	默认只移除 forbidden 和托管权限
@@ -987,7 +977,7 @@ type TargetPermission struct {
     Repository string
     Format     string
     Actions    []string
-    Policy     string // browseRead/readOnly/deny
+    Policy     string // public/downloadOnly/protected
 }
 
 ⸻
@@ -997,9 +987,9 @@ type TargetPermission struct {
 type SyncPlan struct {
     TargetRole              string
     RepositoriesTotal       int
-    BrowseReadRepositories  []string
-    ReadOnlyRepositories    []string
-    DenyRepositories        []string
+    PublicRepositories       []string
+    DownloadOnlyRepositories []string
+    ProtectedRepositories    []string
     PrivilegesToCreate      []string
     PrivilegesToUpdate      []string
     PrivilegesToSkip        []string
@@ -1065,8 +1055,8 @@ A03	能列出仓库	显示仓库名、format、type
 A04	dry-run 不修改 Nexus	只输出计划
 A05	guest sync 能创建目标权限	Privilege 创建成功
 A06	guest sync 能创建或更新访客 Role	Role 更新成功
-A07	devops-prod-generic 没有 browse	UI 不可见
-A08	devops-prod-generic 有 read	curl 精确 URL 可下载
+A07	protected-repo-example 没有 browse	UI 不可见
+A08	protected-repo-example 有 read	curl 精确 URL 可下载
 A09	其他仓库有 browse + read	UI 可见，可下载
 A10	高危权限被移除	全局 browse 不存在
 A11	重复执行幂等	第二次执行无重复创建
@@ -1079,7 +1069,7 @@ A12	审计日志生成	日志内容完整且脱敏
 访客访问 Nexus UI：
 
 仓库	预期
-devops-prod-generic	看不到或无法浏览
+protected-repo-example	看不到或无法浏览
 maven-public	可以看到
 npm-public	可以看到
 其他允许仓库	可以看到
@@ -1089,10 +1079,10 @@ npm-public	可以看到
 
 23.3 下载验收
 
-对 devops-prod-generic 执行：
+对 protected-repo-example 执行：
 
 curl -I \
-'http://nexus.example.com/repository/devops-prod-generic/ades_xxxxxxx_xxxx/20260702/app.tar'
+'http://nexus.example.com/repository/protected-repo-example/ades_xxxxxxx_xxxx/20260702/app.tar'
 
 预期：
 
@@ -1149,8 +1139,8 @@ anonymous 用户自动绑定 role
 V1.0
 
 访客权限同步
-隐藏 devops-prod-generic UI
-保留 devops-prod-generic read 下载
+隐藏 protected-repo-example UI
+保留 protected-repo-example read 下载
 其他仓库按规则 browse + read
 
 V1.1
@@ -1188,10 +1178,10 @@ DevOps 平台集成 API
 nexus-cli 用于治理 Nexus Repository 3.76 的访客 / anonymous 权限。
 第一版本只做 Guest Access Sync，不做用户创建、不做密码管理、不做系统目录级权限。
 当前核心痛点：
-Nexus 不支持 nx-repository-view-*-*-browse 但排除某个仓库的配置。现在需要自动读取所有仓库，为除 devops-prod-generic 外的仓库创建 browse + read 权限；对 devops-prod-generic 只创建 read 权限，不创建 browse 权限。
+Nexus 不支持 nx-repository-view-*-*-browse 但排除某个仓库的配置。现在需要自动读取所有仓库，为除 protected-repo-example 外的仓库创建 browse + read 权限；对 protected-repo-example 只创建 read 权限，不创建 browse 权限。
 目标效果：
-1. 访客在 Nexus UI 中看不到 devops-prod-generic。
-2. 访客可以通过精确 URL curl 下载 devops-prod-generic 中的制品。
+1. 访客在 Nexus UI 中看不到 protected-repo-example。
+2. 访客可以通过精确 URL curl 下载 protected-repo-example 中的制品。
 3. 访客可以在 Nexus UI 中看到其他允许仓库。
 4. 访客角色中不能存在 nx-repository-view-*-*-browse、nx-repository-view-*-*-*、nx-all、nx-admin 等高危权限。
 5. 支持 dry-run，执行前先展示计划。
@@ -1234,23 +1224,15 @@ guestAccess:
   enabled: true
   roleName: "role_guest_repository_access"
   anonymousUserId: "anonymous"
-  defaultPolicy: "browseRead"
-  browseRead:
-    includeRepositories:
-      - "*"
-    excludeRepositories:
-      - "devops-prod-generic"
-  readOnly:
+  defaultPolicy: "public"
+  public:
     repositories:
-      - "devops-prod-generic"
-  deny:
+      - "*"
+  downloadOnly:
     repositories: []
-  actions:
-    browseRead:
-      - browse
-      - read
-    readOnly:
-      - read
+  protected:
+    repositories:
+      - "protected-repo-example"
   forbiddenPrivileges:
     - "nx-repository-view-*-*-browse"
     - "nx-repository-view-*-*-*"
@@ -1272,25 +1254,24 @@ report:
   format: "text"
 五、权限计算规则
 对每个仓库按优先级计算：
-deny > readOnly > browseRead > defaultPolicy
-如果仓库在 deny.repositories 中：
+protected > downloadOnly > public > defaultPolicy
+如果仓库在 protected.repositories 中：
 不授予任何权限。
-如果仓库在 readOnly.repositories 中：
+如果仓库在 downloadOnly.repositories 中：
 只授予 read。
-如果仓库匹配 browseRead.includeRepositories，并且不在 browseRead.excludeRepositories 中：
+如果仓库在 public.repositories 中：
 授予 browse + read。
-如果 defaultPolicy = browseRead：
+如果 defaultPolicy = public：
 默认授予 browse + read。
-如果 defaultPolicy = none：
+如果 defaultPolicy = protected：
 默认不授予权限。
 六、权限生成规则
 第一版本使用 Repository View Privilege，不使用 Content Selector。
 普通仓库：
 Privilege 名称：priv_guest_{format}_{repository}_browse_read
 Actions：browse, read
-devops-prod-generic：
-Privilege 名称：priv_guest_raw_devops_prod_generic_read
-Actions：read
+受保护仓库：
+不创建访客 Privilege，Actions：无
 名称中的 -、.、/ 需要转换为 _。
 七、Role 同步规则
 目标角色由 guestAccess.roleName 指定。
@@ -1308,7 +1289,7 @@ CLI 只管理自己创建的权限，默认根据 priv_guest_ 前缀识别托管
 八、guest check 检查规则
 需要检查：
 1. 目标 role 是否存在。
-2. devops-prod-generic 是否只有 read，没有 browse。
+2. protected-repo-example 是否只有 read，没有 browse。
 3. 其他允许仓库是否存在 browse + read。
 4. 是否存在 nx-repository-view-*-*-browse。
 5. 是否存在 nx-repository-view-*-*-*。
@@ -1321,8 +1302,8 @@ CLI 只管理自己创建的权限，默认根据 priv_guest_ 前缀识别托管
 3. 执行 guest sync --dry-run 不修改 Nexus，只输出计划。
 4. 执行 guest sync 可以创建需要的 privileges。
 5. 执行 guest sync 可以创建或更新 role_guest_repository_access。
-6. 执行后访客 UI 看不到 devops-prod-generic。
-7. 执行后访客可以通过 curl 精确 URL 下载 devops-prod-generic 制品。
+6. 执行后访客 UI 看不到 protected-repo-example。
+7. 执行后访客可以通过 curl 精确 URL 下载 protected-repo-example 制品。
 8. 执行后访客可以在 UI 中看到其他允许仓库。
 9. 访客角色中不存在 nx-repository-view-*-*-browse、nx-repository-view-*-*-*、nx-all、nx-admin。
 10. 重复执行 guest sync 不会重复创建权限。

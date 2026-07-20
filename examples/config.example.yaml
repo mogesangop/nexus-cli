@@ -103,7 +103,7 @@ ha:
 # --- Managed raw hosted repositories / 托管的 raw hosted 仓库 ----------------
 repositories:
   raw:
-    - name: "devops-prod-generic"
+    - name: "protected-repo-example"
       online: true
       storage:
         # The blob store must already exist; nexus-cli never creates or moves it.
@@ -161,59 +161,40 @@ guestAccess:
   # Master switch. When false, `guest protect` is a no-op.
   # 总开关。为 false 时 `guest protect` 不执行任何操作。
   enabled: true
-  # The role whose privileges `guest protect` manages. Must already exist in
-  # Nexus; create it (or reuse the built-in `nx-anonymous` role) and attach
-  # it to the anonymous user before running protect.
-  # `guest protect` 管理的角色名。必须事先在 Nexus 中存在；运行 protect 前请创建
-  # 该角色（或复用内置的 `nx-anonymous` 角色）并绑定到匿名用户。
+  # The role whose privileges `guest protect` manages. It is created if absent
+  # and attached to the anonymous user automatically.
+  # `guest protect` 管理的角色名。不存在时会自动创建，并自动绑定到匿名用户。
   roleName: "role_guest_repository_access"
-  # Nexus's anonymous user id. Kept here for reference / future use.
-  # Nexus 的匿名用户 id。此处仅作记录 / 备用。
+  # Nexus's anonymous user id that receives the managed role.
+  # 接收该托管角色的 Nexus 匿名用户 ID。
   anonymousUserId: "anonymous"
-  # Policy applied to any repo that matches no rule above. Two values:
-  #   browseRead -> grant browse+read (repo visible in UI)
-  #   none       -> grant nothing (repo fully hidden from guest)
-  # 对未命中上述任何规则的仓库应用的策略。取值：
-  #   browseRead -> 授予 browse+read（仓库在 UI 可见）
-  #   none       -> 不授予任何权限（对访客完全隐藏）
-  defaultPolicy: "browseRead"
+  # Policy for repositories not listed below:
+  #   public    -> visible in UI and downloadable
+  #   protected -> hidden in UI and not downloadable
+  # 未列在下方的仓库默认策略：
+  #   public    -> UI 可见且可下载
+  #   protected -> UI 不可见且不可下载
+  defaultPolicy: "public"
 
-  # browseRead rule: repos here get browse+read (visible in UI). Uses
-  # include/exclude glob lists. "*" means all repos; exclude then carves
-  # out exceptions. Put protected repos in deny.repositories.
-  # browseRead 规则：此处仓库授予 browse+read（UI 可见）。使用
-  # include/exclude 通配列表。"*" 表示全部仓库，exclude 用于排除例外；
-  # 受保护仓库应放入 deny.repositories。
-  browseRead:
-    includeRepositories:
-      - "*"
-    excludeRepositories:
-      - "devops-prod-generic"
-  # readOnly rule: repos listed here get ONLY `read` (no browse). They are
-  # hidden from the UI browse tree but still downloadable via direct URL.
-  # readOnly 规则：此处仓库仅授予 `read`（不含 browse）。在 UI 浏览树中
-  # 隐藏，但仍可通过直链 URL 下载。
-  readOnly:
-    repositories: []
-  # deny rule: repos listed here get NO privilege at all — fully invisible
-  # to the guest, even via direct URL.
-  # deny 规则：此处仓库不授予任何权限——对访客完全不可见，
-  # 即使通过直链 URL 也无法访问。
-  deny:
+  # Public repositories get browse+read. "*" means every repository. A
+  # protected or downloadOnly entry always takes precedence over this list.
+  # public 仓库拥有 browse+read。"*" 表示所有仓库；protected 和
+  # downloadOnly 的优先级始终更高。
+  public:
     repositories:
-      - "devops-prod-generic"
-
-  # The Nexus actions each policy grants. browseRead needs both `browse`
-  # and `read`; readOnly needs only `read`. Keep these as-is unless you
-  # understand the security implications.
-  # 每个策略授予的 Nexus actions。browseRead 需要 `browse` 与 `read`；
-  # readOnly 仅需 `read`。除非清楚安全影响，否则请保持默认值。
-  actions:
-    browseRead:
-      - browse
-      - read
-    readOnly:
-      - read
+      - "*"
+  # downloadOnly repositories get read only: hidden in the UI but downloadable
+  # with an exact URL. Use only when that behavior is intentional.
+  # downloadOnly 仓库仅授予 read：UI 不可见，但可通过精确 URL 下载。
+  # 仅在确实需要该行为时使用。
+  downloadOnly: {}
+  # Protected repositories get no guest privilege: hidden in the UI and not
+  # downloadable even with an exact URL. Add a repository here once only.
+  # 受保护仓库不授予任何访客权限：UI 不可见，精确 URL 也不可下载。
+  # 每个受保护仓库只需在此处填写一次。
+  protected:
+    repositories:
+      - "protected-repo-example"
 
   # Privileges that are ALWAYS removed from the guest role during `protect`,
   # regardless of whether they are managed by nexus-cli. These are

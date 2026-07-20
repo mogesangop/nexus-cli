@@ -10,57 +10,64 @@ import (
 func baseConfig() *config.Config {
 	c := config.Default()
 	// concrete repos so tests are deterministic
-	c.GuestAccess.BrowseRead.ExcludeRepositories = []string{"devops-prod-generic"}
-	c.GuestAccess.ReadOnly.Repositories = []string{"devops-prod-generic"}
-	c.GuestAccess.Deny.Repositories = []string{"security-prod-generic"}
+	c.GuestAccess.DownloadOnly.Repositories = []string{"protected-repo-example"}
+	c.GuestAccess.Protected.Repositories = []string{"security-prod-generic"}
 	return c
 }
 
 func repos() []nexus.Repository {
 	return []nexus.Repository{
-		{Name: "devops-prod-generic", Format: "raw", Type: "hosted"},
+		{Name: "protected-repo-example", Format: "raw", Type: "hosted"},
 		{Name: "maven-public", Format: "maven2", Type: "group"},
 		{Name: "npm-public", Format: "npm", Type: "group"},
 		{Name: "security-prod-generic", Format: "raw", Type: "hosted"},
 	}
 }
 
-func TestPolicyFor_PriorityDeny(t *testing.T) {
+func TestPolicyFor_ProtectedWins(t *testing.T) {
 	p := NewPlanner(baseConfig())
-	if got := p.PolicyFor("security-prod-generic"); got != PolicyDeny {
-		t.Fatalf("deny repo got %v", got)
+	if got := p.PolicyFor("security-prod-generic"); got != PolicyProtected {
+		t.Fatalf("protected repo got %v", got)
 	}
 }
 
-func TestPolicyFor_ReadOnlyBeatsBrowseRead(t *testing.T) {
-	p := NewPlanner(baseConfig())
-	// devops-prod-generic is both readOnly and browseRead-excluded; readOnly wins
-	if got := p.PolicyFor("devops-prod-generic"); got != PolicyReadOnly {
-		t.Fatalf("read-only repo got %v", got)
-	}
-}
-
-func TestPolicyFor_BrowseRead(t *testing.T) {
-	p := NewPlanner(baseConfig())
-	if got := p.PolicyFor("maven-public"); got != PolicyBrowseRead {
-		t.Fatalf("maven-public got %v want browseRead", got)
-	}
-}
-
-func TestPolicyFor_DefaultNone(t *testing.T) {
+func TestPolicyFor_ProtectedWinsOverEveryOtherList(t *testing.T) {
 	c := baseConfig()
-	c.GuestAccess.DefaultPolicy = "none"
-	c.GuestAccess.BrowseRead.IncludeRepositories = []string{} // nothing included explicitly
+	c.GuestAccess.Public.Repositories = []string{"*"}
+	c.GuestAccess.DownloadOnly.Repositories = []string{"security-prod-generic"}
 	p := NewPlanner(c)
-	// a repo not in any list with defaultPolicy=none -> none
-	if got := p.PolicyFor("unknown-repo"); got != PolicyNone {
-		t.Fatalf("unknown repo got %v want none", got)
+	if got := p.PolicyFor("security-prod-generic"); got != PolicyProtected {
+		t.Fatalf("protected repo got %v, want protected", got)
+	}
+}
+
+func TestPolicyFor_DownloadOnly(t *testing.T) {
+	p := NewPlanner(baseConfig())
+	if got := p.PolicyFor("protected-repo-example"); got != PolicyDownloadOnly {
+		t.Fatalf("download-only repo got %v", got)
+	}
+}
+
+func TestPolicyFor_Public(t *testing.T) {
+	p := NewPlanner(baseConfig())
+	if got := p.PolicyFor("maven-public"); got != PolicyPublic {
+		t.Fatalf("maven-public got %v want public", got)
+	}
+}
+
+func TestPolicyFor_DefaultProtected(t *testing.T) {
+	c := baseConfig()
+	c.GuestAccess.DefaultPolicy = "protected"
+	c.GuestAccess.Public.Repositories = []string{} // nothing explicitly public
+	p := NewPlanner(c)
+	if got := p.PolicyFor("unknown-repo"); got != PolicyProtected {
+		t.Fatalf("unknown repo got %v want protected", got)
 	}
 }
 
 func TestComputeTargets_SkipsDenyAndNone(t *testing.T) {
 	c := baseConfig()
-	c.GuestAccess.DefaultPolicy = "browseRead"
+	c.GuestAccess.DefaultPolicy = "public"
 	p := NewPlanner(c)
 	got := p.ComputeTargets(repos())
 	names := make(map[string]TargetPermission, len(got))
@@ -70,10 +77,10 @@ func TestComputeTargets_SkipsDenyAndNone(t *testing.T) {
 	if _, ok := names["security-prod-generic"]; ok {
 		t.Error("deny repo must not produce a target")
 	}
-	if _, ok := names["devops-prod-generic"]; !ok {
+	if _, ok := names["protected-repo-example"]; !ok {
 		t.Error("read-only repo must produce a target")
 	}
-	if tp := names["devops-prod-generic"]; !containsString(tp.Actions, "read") || containsString(tp.Actions, "browse") {
+	if tp := names["protected-repo-example"]; !containsString(tp.Actions, "read") || containsString(tp.Actions, "browse") {
 		t.Errorf("read-only actions = %v", tp.Actions)
 	}
 	if tp := names["maven-public"]; !containsString(tp.Actions, "browse") || !containsString(tp.Actions, "read") {
@@ -83,12 +90,12 @@ func TestComputeTargets_SkipsDenyAndNone(t *testing.T) {
 
 func TestBuild_PlanShape(t *testing.T) {
 	c := baseConfig()
-	c.GuestAccess.DefaultPolicy = "browseRead"
+	c.GuestAccess.DefaultPolicy = "public"
 	p := NewPlanner(c)
 
 	// existing managed: the read-only privilege already present.
 	// existingAll includes a forbidden global browse.
-	readOnlyName := p.namer.PrivilegeName("raw", "devops-prod-generic", []string{"read"})
+	readOnlyName := p.namer.PrivilegeName("raw", "protected-repo-example", []string{"read"})
 	existingManaged := []string{readOnlyName}
 	existingAll := append([]string{}, existingManaged...)
 	existingAll = append(existingAll, "nx-repository-view-*-*-browse", "nx-search-read")
@@ -144,16 +151,16 @@ func TestBuild_ForbiddenPrivilegesUseGlobMatching(t *testing.T) {
 	c.GuestAccess.ForbiddenPrivileges = []string{"nx-repository-view-*-*-browse"}
 	p := NewPlanner(c)
 	existingAll := []string{
-		"nx-repository-view-raw-devops-prod-generic-browse",
-		"nx-repository-view-raw-devops-prod-generic-read",
+		"nx-repository-view-raw-protected-repo-example-browse",
+		"nx-repository-view-raw-protected-repo-example-read",
 	}
 
 	plan := p.Build(repos(), nil, existingAll)
 
-	if !containsString(plan.RemovedRiskyPrivileges, "nx-repository-view-raw-devops-prod-generic-browse") {
+	if !containsString(plan.RemovedRiskyPrivileges, "nx-repository-view-raw-protected-repo-example-browse") {
 		t.Fatalf("expected concrete browse privilege to match forbidden glob, got %v", plan.RemovedRiskyPrivileges)
 	}
-	if containsString(plan.RemovedRiskyPrivileges, "nx-repository-view-raw-devops-prod-generic-read") {
+	if containsString(plan.RemovedRiskyPrivileges, "nx-repository-view-raw-protected-repo-example-read") {
 		t.Fatalf("read-only privilege should not match browse glob, got %v", plan.RemovedRiskyPrivileges)
 	}
 }
@@ -190,8 +197,21 @@ func TestBuild_RemovesReadPrivilegeForProtectedRepo(t *testing.T) {
 	if containsString(plan.PrivilegesToSkip, readName) {
 		t.Fatalf("protected repo read privilege should not be skipped, got %v", plan.PrivilegesToSkip)
 	}
-	if containsString(plan.DenyRepositories, "security-prod-generic") == false {
-		t.Fatalf("expected protected repo in deny list, got %v", plan.DenyRepositories)
+	if containsString(plan.ProtectedRepositories, "security-prod-generic") == false {
+		t.Fatalf("expected protected repo in protected list, got %v", plan.ProtectedRepositories)
+	}
+}
+
+func TestPolicyFor_LegacyConfiguration(t *testing.T) {
+	c := config.Default()
+	c.GuestAccess.Public.Repositories = nil
+	c.GuestAccess.Protected.Repositories = nil
+	c.GuestAccess.DefaultPolicy = "browseRead"
+	c.GuestAccess.BrowseRead.IncludeRepositories = []string{"*"}
+	c.GuestAccess.Deny.Repositories = []string{"security-prod-generic"}
+	p := NewPlanner(c)
+	if got := p.PolicyFor("security-prod-generic"); got != PolicyProtected {
+		t.Fatalf("legacy protected repo got %v", got)
 	}
 }
 

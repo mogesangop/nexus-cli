@@ -80,18 +80,18 @@ func (c *Checker) Check(client *nexus.Client) (*report.CheckReport, error) {
 	for _, r := range repos {
 		pol := c.plan.PolicyFor(r.Name)
 		switch pol {
-		case PolicyDeny:
-			readName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyReadOnly))
-			browseReadName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyBrowseRead))
+		case PolicyProtected:
+			readName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyDownloadOnly))
+			browseReadName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyPublic))
 			if _, ok := privSet[readName]; ok {
-				out.Fails = append(out.Fails, fmt.Sprintf("%s is protected/denied but has read privilege", r.Name))
+				out.Fails = append(out.Fails, fmt.Sprintf("%s is protected but has read privilege", r.Name))
 			} else if _, ok := privSet[browseReadName]; ok {
-				out.Fails = append(out.Fails, fmt.Sprintf("%s is protected/denied but has browse+read privilege", r.Name))
+				out.Fails = append(out.Fails, fmt.Sprintf("%s is protected but has browse+read privilege", r.Name))
 			} else {
-				out.Passes = append(out.Passes, fmt.Sprintf("%s is protected/denied for guest", r.Name))
+				out.Passes = append(out.Passes, fmt.Sprintf("%s is protected for guest", r.Name))
 			}
-		case PolicyReadOnly:
-			readName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyReadOnly))
+		case PolicyDownloadOnly:
+			readName := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyDownloadOnly))
 			browseName := c.namer.PrivilegeName(r.Format, r.Name, []string{"browse"})
 			if _, ok := privSet[readName]; ok {
 				out.Passes = append(out.Passes, fmt.Sprintf("%s has read permission", r.Name))
@@ -103,8 +103,8 @@ func (c *Checker) Check(client *nexus.Client) (*report.CheckReport, error) {
 			} else {
 				out.Passes = append(out.Passes, fmt.Sprintf("%s has no browse permission", r.Name))
 			}
-		case PolicyBrowseRead:
-			name := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyBrowseRead))
+		case PolicyPublic:
+			name := c.namer.PrivilegeName(r.Format, r.Name, c.plan.ActionsFor(PolicyPublic))
 			if _, ok := privSet[name]; ok {
 				out.Passes = append(out.Passes, fmt.Sprintf("%s has browse+read permission", r.Name))
 			} else {

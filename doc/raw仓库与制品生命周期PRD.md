@@ -30,7 +30,7 @@
 推荐先运行 preview，再由 cron 调用 run：
 
 ```cron
-30 2 * * * /opt/nexus-cli repo lifecycle run --config /etc/nexus-cli/config.yaml --repo devops-prod-generic --yes
+30 2 * * * /opt/nexus-cli repo lifecycle run --config /etc/nexus-cli/config.yaml --repo protected-repo-example --yes
 ```
 
 管理员密码只从配置指定的环境变量读取。仓库变更与生命周期执行写入 JSONL 审计日志，包含扫描数、候选数和删除数，不包含密码或 Authorization header。

@@ -13,7 +13,7 @@ many repositories and artifacts in the Nexus UI. Nexus does not support
 repository list, builds per-repository `repository-view` privileges, and binds
 them to a guest role — granting `browse+read` to public repos and no guest
 access at all to protected repos that must stay invisible and non-downloadable.
-The older `readOnly` policy remains available for the advanced case where a
+The `downloadOnly` policy remains available for the advanced case where a
 repo should be hidden from UI browse but still downloadable by exact URL.
 
 See `doc/nexus-cli第一版本PRD.md` for the full product spec.
@@ -121,8 +121,8 @@ CGO_ENABLED=0 go build -o nexus-cli ./cmd/nexus-cli
 #    ~/.nexus-cli/config.yaml (dir created with 0700 if missing).
 ./nexus-cli config init
 
-# 2. Edit the config: set baseUrl, roleName, and the deny / browseRead
-#    repository lists. Put protected repos in deny.repositories. Then export
+# 2. Edit the config: set baseUrl, roleName, and repository lists. Put each
+#    protected repository in protected.repositories. Then export
 #    the admin password:
 export NEXUS_ADMIN_PASSWORD='your_password'
 
@@ -146,7 +146,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ```sh
 # Dry-run first: prints the selector/privilege/role/user that would be created.
 ./nexus-cli user create-readonly \
-  --repo devops-prod-generic \
+  --repo protected-repo-example \
   --path /team-a/ \
   --user alice.team-a \
   --email alice@example.com \
@@ -155,7 +155,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 # Apply. The generated password is printed ONCE to stdout — save it now.
 ./nexus-cli user create-readonly \
-  --repo devops-prod-generic \
+  --repo protected-repo-example \
   --path /team-a/ \
   --user alice.team-a \
   --email alice@example.com \
@@ -350,51 +350,40 @@ authorization headers.
 ### Policy precedence (per repository)
 
 ```
-deny > readOnly > browseRead > defaultPolicy
+protected > downloadOnly > public > defaultPolicy
 ```
 
-A repository in `deny.repositories` gets no privilege. In `readOnly` it gets
-`read` only (hidden from UI, still downloadable). Matching `browseRead` (and
-not excluded) gets `browse+read`. Otherwise `defaultPolicy` decides.
+A repository in `protected.repositories` gets no privilege. In `downloadOnly`
+it gets `read` only (hidden from UI, still downloadable). In `public` it gets
+`browse+read`. Otherwise `defaultPolicy` decides.
 
 ### Protected repository: hidden and non-downloadable for guest
 
 A protected repository grants no anonymous `browse` or `read`. Nexus UI
 repository listing and tree browsing depend on `browse`; exact URL downloads
-depend on `read`. Configure protected repos in `deny.repositories`:
+depend on `read`. Add each protected repository once to
+`protected.repositories`. This policy takes precedence over every other list.
 
-1. Add the repository to `browseRead.excludeRepositories` so it does not get
-   `browse+read`.
-2. Add the same repository to `deny.repositories` so it gets no guest privilege.
-
-Example for `devops-prod-generic`:
+Example for `protected-repo-example`:
 
 ```yaml
 guestAccess:
   enabled: true
   roleName: "role_guest_repository_access"
   anonymousUserId: "anonymous"
-  defaultPolicy: "browseRead"
-  browseRead:
-    includeRepositories:
-      - "*"
-    excludeRepositories:
-      - "devops-prod-generic"
-  readOnly:
-    repositories: []
-  deny:
+  defaultPolicy: "public"
+  public:
     repositories:
-      - "devops-prod-generic"
-  actions:
-    browseRead:
-      - browse
-      - read
-    readOnly:
-      - read
+      - "*"
+  downloadOnly:
+    repositories: []
+  protected:
+    repositories:
+      - "protected-repo-example"
 ```
 
-Before running, make sure `role_guest_repository_access` exists in Nexus and
-the anonymous user (`anonymous`) has that role. Then apply and check:
+`guest protect` creates `role_guest_repository_access` if needed and attaches
+it to the anonymous user (`anonymous`). Then apply and check:
 
 ```sh
 export NEXUS_ADMIN_PASSWORD='your_password'
@@ -403,15 +392,19 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ./nexus-cli guest check --config config.yaml
 ```
 
+Existing `browseRead` / `readOnly` / `deny` configurations remain supported,
+but newly generated and maintained files should use `public` / `downloadOnly` /
+`protected`.
+
 Verify the behavior:
 
 ```sh
-# 1. Open the Nexus UI as anonymous / logged out. devops-prod-generic should
+# 1. Open the Nexus UI as anonymous / logged out. protected-repo-example should
 #    not appear in the repository list.
 
 # 2. Exact artifact URLs should fail for anonymous / logged-out users.
 curl -fL \
-  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar'
+  'http://nexus.example.com/repository/protected-repo-example/path/to/artifact.tar'
 ```
 
 If direct download still works or the repository is still visible in the UI,
@@ -422,7 +415,7 @@ does not delete every non-managed role.
 ### Privilege naming
 
 `priv_guest_{format}_{sanitizedRepo}_{sortedActions}` — e.g.
-`priv_guest_raw_devops_prod_generic_read`. Dashes, dots and slashes in the
+`priv_guest_raw_protected_repo_example_read`. Dashes, dots and slashes in the
 repo name are replaced with `_`.
 
 ### Managed privileges
@@ -446,8 +439,8 @@ delete/recreates a conflicting repository. Preview changes and retention first:
 
 ```sh
 ./nexus-cli repo raw apply --dry-run
-./nexus-cli repo lifecycle preview --repo devops-prod-generic
-./nexus-cli repo lifecycle run --repo devops-prod-generic --yes
+./nexus-cli repo lifecycle preview --repo protected-repo-example
+./nexus-cli repo lifecycle run --repo protected-repo-example --yes
 ```
 
 The lifecycle run can be scheduled with cron. Deleting a Nexus component does

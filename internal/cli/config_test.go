@@ -76,7 +76,7 @@ func TestConfigInit_CreatesDirAndWritesDefault(t *testing.T) {
 	for _, want := range []string{
 		"repositories:",
 		"  raw:",
-		`    - name: devops-prod-generic`,
+		`    - name: protected-repo-example`,
 		"      storage:",
 	} {
 		if !strings.Contains(text, want) {

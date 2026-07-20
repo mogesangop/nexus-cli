@@ -7,7 +7,7 @@
 
 一个用于治理 **Nexus Repository 3.76** 访客 / 匿名访问的命令行工具。
 
-第一版本解决一个问题：访客（匿名用户）在 Nexus UI 中能看到过多仓库与制品。Nexus 不支持「给所有仓库授予 browse，但排除某一个」的权限模型，因此 `nexus-cli` 会读取仓库列表，为每个仓库构建 `repository-view` 权限并绑定到访客角色 —— 对公开仓库授予 `browse+read`，对受保护仓库不授予任何访客权限，使其不可见且不可通过直链下载。旧的 `readOnly` 策略仍保留，用于“UI 不可见但精确 URL 可下载”的高级场景。
+第一版本解决一个问题：访客（匿名用户）在 Nexus UI 中能看到过多仓库与制品。Nexus 不支持「给所有仓库授予 browse，但排除某一个」的权限模型，因此 `nexus-cli` 会读取仓库列表，为每个仓库构建 `repository-view` 权限并绑定到访客角色 —— 对公开仓库授予 `browse+read`，对受保护仓库不授予任何访客权限，使其不可见且不可通过直链下载。`downloadOnly` 策略保留用于“UI 不可见但精确 URL 可下载”的高级场景。
 
 完整产品规格见 `doc/nexus-cli第一版本PRD.md`。
 
@@ -94,8 +94,8 @@ CGO_ENABLED=0 go build -o nexus-cli ./cmd/nexus-cli
 #    （目录不存在则按 0700 权限创建）。
 ./nexus-cli config init
 
-# 2. 编辑配置：设置 baseUrl、roleName，以及 deny / browseRead
-#    仓库列表。受保护仓库放入 deny.repositories。然后导出管理员密码：
+# 2. 编辑配置：设置 baseUrl、roleName 和仓库列表。受保护仓库放入
+#    protected.repositories。然后导出管理员密码：
 export NEXUS_ADMIN_PASSWORD='your_password'
 
 # 3. 验证连通性。--config 可省略；未指定时按以下顺序搜索首个存在的文件：
@@ -117,7 +117,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ```sh
 # 先 dry-run：打印将会创建的 selector/privilege/role/user。
 ./nexus-cli user create-readonly \
-  --repo devops-prod-generic \
+  --repo protected-repo-example \
   --path /team-a/ \
   --user alice.team-a \
   --email alice@example.com \
@@ -126,7 +126,7 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 
 # 正式执行。生成的密码只会打印一次到 stdout，请立即保存。
 ./nexus-cli user create-readonly \
-  --repo devops-prod-generic \
+  --repo protected-repo-example \
   --path /team-a/ \
   --user alice.team-a \
   --email alice@example.com \
@@ -294,45 +294,34 @@ nexus-cli guest check --config config.yaml
 ### 仓库策略优先级（每个仓库）
 
 ```
-deny > readOnly > browseRead > defaultPolicy
+protected > downloadOnly > public > defaultPolicy
 ```
 
-命中 `deny.repositories` 的仓库不授予任何权限；命中 `readOnly` 的只授予 `read`（UI 不可见，仍可下载）；匹配 `browseRead` 且未被排除的授予 `browse+read`；其余由 `defaultPolicy` 决定。
+命中 `protected.repositories` 的仓库不授予任何权限；命中 `downloadOnly` 的只授予 `read`（UI 不可见，仍可下载）；命中 `public` 的授予 `browse+read`；其余由 `defaultPolicy` 决定。
 
 ### 设置受保护仓库：UI 不可见，且不可直链下载
 
-所谓“受保护仓库”就是不向匿名访客授予任何 `browse` 或 `read`。Nexus UI 的仓库列表和目录浏览依赖 `browse`；精确 URL 下载依赖 `read`。因此配置时要做两件事：
+所谓“受保护仓库”就是不向匿名访客授予任何 `browse` 或 `read`。Nexus UI 的仓库列表和目录浏览依赖 `browse`；精确 URL 下载依赖 `read`。只需将仓库填入 `protected.repositories` 一次；该策略始终优先于其它列表。
 
-1. 从 `browseRead.excludeRepositories` 排除该仓库，避免授予 `browse+read`。
-2. 加入 `deny.repositories`，不授予任何访客权限。
-
-例如要保护 `devops-prod-generic`：
+例如要保护 `protected-repo-example`：
 
 ```yaml
 guestAccess:
   enabled: true
   roleName: "role_guest_repository_access"
   anonymousUserId: "anonymous"
-  defaultPolicy: "browseRead"
-  browseRead:
-    includeRepositories:
-      - "*"
-    excludeRepositories:
-      - "devops-prod-generic"
-  readOnly:
-    repositories: []
-  deny:
+  defaultPolicy: "public"
+  public:
     repositories:
-      - "devops-prod-generic"
-  actions:
-    browseRead:
-      - browse
-      - read
-    readOnly:
-      - read
+      - "*"
+  downloadOnly:
+    repositories: []
+  protected:
+    repositories:
+      - "protected-repo-example"
 ```
 
-运行前确认 Nexus 中已存在 `role_guest_repository_access`，并且匿名用户 `anonymous` 已绑定这个角色。然后执行：
+`guest protect` 会在需要时创建 `role_guest_repository_access`，并自动绑定到匿名用户 `anonymous`。然后执行：
 
 ```sh
 export NEXUS_ADMIN_PASSWORD='your_password'
@@ -341,14 +330,17 @@ export NEXUS_ADMIN_PASSWORD='your_password'
 ./nexus-cli guest check --config config.yaml
 ```
 
+已有的 `browseRead` / `readOnly` / `deny` 配置仍可使用；新建或维护配置时请改用
+`public` / `downloadOnly` / `protected`。
+
 验证结果：
 
 ```sh
-# 1. 用匿名 / 未登录浏览器打开 Nexus UI，仓库列表中不应看到 devops-prod-generic。
+# 1. 用匿名 / 未登录浏览器打开 Nexus UI，仓库列表中不应看到 protected-repo-example。
 
 # 2. 匿名 / 未登录用户访问精确制品 URL 也应失败。
 curl -fL \
-  'http://nexus.example.com/repository/devops-prod-generic/path/to/artifact.tar'
+  'http://nexus.example.com/repository/protected-repo-example/path/to/artifact.tar'
 ```
 
 如果直链仍可下载或 UI 仍能看到该仓库，通常是匿名用户还有其它角色或权限包含了该仓库访问能力；`guest protect` 会移除 `forbiddenPrivileges` 中列出的宽泛 browse/admin 权限，但不会删除所有非托管角色。
@@ -356,7 +348,7 @@ curl -fL \
 ### 权限命名
 
 `priv_guest_{format}_{sanitize后的仓库名}_{排序后的actions}` —— 例如
-`priv_guest_raw_devops_prod_generic_read`。仓库名中的 `-`、`.`、`/` 会被替换为 `_`。
+`priv_guest_raw_protected_repo_example_read`。仓库名中的 `-`、`.`、`/` 会被替换为 `_`。
 
 ### 托管权限
 
@@ -370,8 +362,8 @@ curl -fL \
 
 ```sh
 ./nexus-cli repo raw apply --dry-run
-./nexus-cli repo lifecycle preview --repo devops-prod-generic
-./nexus-cli repo lifecycle run --repo devops-prod-generic --yes
+./nexus-cli repo lifecycle preview --repo protected-repo-example
+./nexus-cli repo lifecycle run --repo protected-repo-example --yes
 ```
 
 生命周期可由 cron 定时调用。`run` 会删除 Nexus component，但磁盘空间仍需 Nexus 的 blob store compact 任务回收。

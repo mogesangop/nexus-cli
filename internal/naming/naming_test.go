@@ -16,8 +16,8 @@ func cfg() config.PrivilegeNaming {
 
 func TestPrivilegeName_ReadOnlyRaw(t *testing.T) {
 	g := New(cfg())
-	got := g.PrivilegeName("raw", "devops-prod-generic", []string{"read"})
-	want := "priv_guest_raw_devops_prod_generic_read"
+	got := g.PrivilegeName("raw", "protected-repo-example", []string{"read"})
+	want := "priv_guest_raw_protected_repo_example_read"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -45,7 +45,7 @@ func TestPrivilegeName_DedupActions(t *testing.T) {
 func TestSanitizeRepo_DotsAndSlashes(t *testing.T) {
 	g := New(cfg())
 	cases := map[string]string{
-		"devops-prod-generic": "devops_prod_generic",
+		"protected-repo-example": "protected_repo_example",
 		"foo.bar":             "foo_bar",
 		"a/b/c":               "a_b_c",
 		"plain":               "plain",
@@ -59,7 +59,7 @@ func TestSanitizeRepo_DotsAndSlashes(t *testing.T) {
 
 func TestIsManaged(t *testing.T) {
 	g := New(cfg())
-	if !g.IsManaged("priv_guest_raw_devops_prod_generic_read") {
+	if !g.IsManaged("priv_guest_raw_protected_repo_example_read") {
 		t.Error("expected managed")
 	}
 	if g.IsManaged("nx-admin") {
@@ -74,8 +74,8 @@ func TestNoReplaceDash(t *testing.T) {
 	c := cfg()
 	c.ReplaceDashWithUScore = false
 	g := New(c)
-	got := g.PrivilegeName("raw", "devops-prod-generic", []string{"read"})
-	want := "priv_guest_raw_devops-prod-generic_read"
+	got := g.PrivilegeName("raw", "protected-repo-example", []string{"read"})
+	want := "priv_guest_raw_protected-repo-example_read"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

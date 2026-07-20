@@ -144,16 +144,21 @@ func (h *HAFailoverConfig) UnmarshalYAML(value *yaml.Node) error {
 
 // GuestAccess configures the guest/anonymous role permission sync.
 type GuestAccess struct {
-	Enabled             bool           `yaml:"enabled"`
-	RoleName            string         `yaml:"roleName"`
-	AnonymousUserID     string         `yaml:"anonymousUserId"`
-	DefaultPolicy       string         `yaml:"defaultPolicy"`
-	BrowseRead          BrowseReadRule `yaml:"browseRead"`
-	ReadOnly            NameList       `yaml:"readOnly"`
-	Deny                NameList       `yaml:"deny"`
-	Actions             ActionsConfig  `yaml:"actions"`
-	ForbiddenPrivileges []string       `yaml:"forbiddenPrivileges"`
-	WarnPrivileges      []string       `yaml:"warnPrivileges"`
+	Enabled             bool     `yaml:"enabled"`
+	RoleName            string   `yaml:"roleName"`
+	AnonymousUserID     string   `yaml:"anonymousUserId"`
+	DefaultPolicy       string   `yaml:"defaultPolicy"`
+	Public              NameList `yaml:"public,omitempty"`
+	DownloadOnly        NameList `yaml:"downloadOnly,omitempty"`
+	Protected           NameList `yaml:"protected,omitempty"`
+	ForbiddenPrivileges []string `yaml:"forbiddenPrivileges"`
+	WarnPrivileges      []string `yaml:"warnPrivileges"`
+
+	// Legacy fields keep existing guestAccess files working. New configuration
+	// should use public, downloadOnly, and protected instead.
+	BrowseRead BrowseReadRule `yaml:"browseRead,omitempty"`
+	ReadOnly   NameList       `yaml:"readOnly,omitempty"`
+	Deny       NameList       `yaml:"deny,omitempty"`
 }
 
 // BrowseReadRule selects repositories eligible for browse+read.
@@ -165,12 +170,6 @@ type BrowseReadRule struct {
 // NameList wraps a repository name list under a "repositories" key.
 type NameList struct {
 	Repositories []string `yaml:"repositories"`
-}
-
-// ActionsConfig maps policy names to the Nexus actions they grant.
-type ActionsConfig struct {
-	BrowseRead []string `yaml:"browseRead"`
-	ReadOnly   []string `yaml:"readOnly"`
 }
 
 // PrivilegeNaming controls generated privilege name formatting.
@@ -242,7 +241,7 @@ func Default() *Config {
 		Repositories: RepositoriesConfig{
 			Raw: []RawRepository{
 				{
-					Name:   "devops-prod-generic",
+					Name:   "protected-repo-example",
 					Online: true,
 					Storage: RawStorage{
 						BlobStoreName:               "default",
@@ -286,20 +285,15 @@ func Default() *Config {
 			Enabled:         true,
 			RoleName:        "role_guest_repository_access",
 			AnonymousUserID: "anonymous",
-			DefaultPolicy:   "browseRead",
-			BrowseRead: BrowseReadRule{
-				IncludeRepositories: []string{"*"},
-				ExcludeRepositories: []string{"devops-prod-generic"},
+			DefaultPolicy:   "public",
+			Public: NameList{
+				Repositories: []string{"*"},
 			},
-			ReadOnly: NameList{
+			DownloadOnly: NameList{
 				Repositories: []string{},
 			},
-			Deny: NameList{
-				Repositories: []string{"devops-prod-generic"},
-			},
-			Actions: ActionsConfig{
-				BrowseRead: []string{"browse", "read"},
-				ReadOnly:   []string{"read"},
+			Protected: NameList{
+				Repositories: []string{"protected-repo-example"},
 			},
 			ForbiddenPrivileges: []string{
 				"nx-repository-view-*-*-browse",
@@ -447,9 +441,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("guestAccess.roleName is required")
 	}
 	switch c.GuestAccess.DefaultPolicy {
-	case "browseRead", "none":
+	case "public", "protected", "browseRead", "none":
 	default:
-		return fmt.Errorf("guestAccess.defaultPolicy must be browseRead or none, got %q", c.GuestAccess.DefaultPolicy)
+		return fmt.Errorf("guestAccess.defaultPolicy must be public or protected, got %q", c.GuestAccess.DefaultPolicy)
 	}
 	if c.PrivilegeNaming.Prefix == "" {
 		return fmt.Errorf("privilegeNaming.prefix is required")

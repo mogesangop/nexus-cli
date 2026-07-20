@@ -108,8 +108,8 @@ nexus-cli ha health --output json
 nexus-cli repo apply --dry-run --output json
 nexus-cli blobstore apply --dry-run --output json
 nexus-cli guest protect --dry-run --output json
-nexus-cli user create-readonly --repo devops-prod-generic --path /team-a/ --user alice --email alice@example.com --dry-run --output json
-nexus-cli repo lifecycle preview --repo devops-prod-generic --output json
+nexus-cli user create-readonly --repo protected-repo-example --path /team-a/ --user alice --email alice@example.com --dry-run --output json
+nexus-cli repo lifecycle preview --repo protected-repo-example --output json
 ```
 
 人工确认后执行：
@@ -118,8 +118,8 @@ nexus-cli repo lifecycle preview --repo devops-prod-generic --output json
 nexus-cli repo apply --yes --output json
 nexus-cli blobstore apply --yes --output json
 nexus-cli guest protect --yes --output json
-nexus-cli user create-readonly --repo devops-prod-generic --path /team-a/ --user alice --email alice@example.com --yes --output json
-nexus-cli repo lifecycle run --repo devops-prod-generic --yes --output json
+nexus-cli user create-readonly --repo protected-repo-example --path /team-a/ --user alice --email alice@example.com --yes --output json
+nexus-cli repo lifecycle run --repo protected-repo-example --yes --output json
 ```
 
 HA 高风险操作继续使用专用门禁：

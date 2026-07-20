@@ -447,7 +447,7 @@ func privilegeConflict(userID string, priv nexus.Privilege, repo, targetPath str
 	switch priv.Type {
 	case "repository-view":
 		if userID == "anonymous" {
-			return fmt.Sprintf("anonymous has access to %s via privilege %s; add %s to guestAccess.deny.repositories and run nexus-cli guest protect", repo, priv.Name, repo)
+			return fmt.Sprintf("anonymous has access to %s via privilege %s; add %s to guestAccess.protected.repositories and run nexus-cli guest protect", repo, priv.Name, repo)
 		}
 		return fmt.Sprintf("user %s has repository-wide access via privilege %s; protect the repo with guest protect and remove broad non-admin grants first", userID, priv.Name)
 	case "repository-content-selector":
@@ -462,7 +462,7 @@ func privilegeConflict(userID string, priv nexus.Privilege, repo, targetPath str
 		}
 		if pathsOverlap(prefix, targetPath) {
 			if userID == "anonymous" {
-				return fmt.Sprintf("anonymous has access to %s via privilege %s; add %s to guestAccess.deny.repositories and run nexus-cli guest protect", repo, priv.Name, repo)
+				return fmt.Sprintf("anonymous has access to %s via privilege %s; add %s to guestAccess.protected.repositories and run nexus-cli guest protect", repo, priv.Name, repo)
 			}
 			return fmt.Sprintf("user %s has overlapping path access via privilege %s (%s)", userID, priv.Name, prefix)
 		}

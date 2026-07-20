@@ -246,7 +246,7 @@ PRD 是设计文档,验证以"可演练、可落地"为准:
    认每一步有明确执行人与产物,fencing 与单写原则无漏洞。
 2. **dev 环境实测**:起两台容器化 Nexus,配置 Export/Import 定时任务 +
    rsync blob 同步;手动 kill 主节点 → 切 F5 → 验证从节点能匿名下载
-   `devops-prod-generic` 制品(对应 `nexus-cli guest` 治理的仓库)。
+   `protected-repo-example` 制品(对应 `nexus-cli guest` 治理的仓库)。
 3. **RPO 验证**:主节点发布一个制品后 10 分钟 kill,确认从节点在最近一次
    导入窗口内可见该制品(或明确缺口 ≤15 分钟)。
 4. **权限一致性**:从节点接管后跑 `nexus-cli guest check`,确认

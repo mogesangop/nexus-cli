@@ -206,16 +206,16 @@ func (s *Syncer) roleHasForbiddenPrivilege(client *nexus.Client, roleID string, 
 
 func toReport(plan *SyncPlan, dryRun bool) *report.SyncReport {
 	r := &report.SyncReport{
-		DryRun:                 dryRun,
-		TargetRole:             plan.TargetRole,
-		RepositoriesTotal:      plan.RepositoriesTotal,
-		BrowseReadRepositories: plan.BrowseReadRepositories,
-		ReadOnlyRepositories:   plan.ReadOnlyRepositories,
-		DenyRepositories:       plan.DenyRepositories,
-		PrivilegesToSkip:       plan.PrivilegesToSkip,
-		PrivilegesToRemove:     plan.PrivilegesToRemove,
-		RemovedRiskyPrivileges: plan.RemovedRiskyPrivileges,
-		Warnings:               plan.Warnings,
+		DryRun:                   dryRun,
+		TargetRole:               plan.TargetRole,
+		RepositoriesTotal:        plan.RepositoriesTotal,
+		PublicRepositories:       plan.PublicRepositories,
+		DownloadOnlyRepositories: plan.DownloadOnlyRepositories,
+		ProtectedRepositories:    plan.ProtectedRepositories,
+		PrivilegesToSkip:         plan.PrivilegesToSkip,
+		PrivilegesToRemove:       plan.PrivilegesToRemove,
+		RemovedRiskyPrivileges:   plan.RemovedRiskyPrivileges,
+		Warnings:                 plan.Warnings,
 	}
 	for _, w := range plan.PrivilegesToCreate {
 		r.PrivilegesToCreate = append(r.PrivilegesToCreate, w.Name)

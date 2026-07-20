@@ -164,7 +164,7 @@
 
 **Confirmation**：
 
-1. 可匿名下载 `devops-prod-generic` 中已完成复制的验证制品。
+1. 可匿名下载 `protected-repo-example` 中已完成复制的验证制品。
 2. `nexus-cli guest check` 不报告 `priv_guest_*` 和 guest 角色漂移。
 3. 仓库定义、online 状态及 blob store 引用与主节点最近快照一致。
 4. 对缺失制品可关联到最后成功的 blob 和元数据同步时间。

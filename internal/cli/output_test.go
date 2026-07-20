@@ -773,9 +773,8 @@ func writeAIDryRunConfig(t *testing.T, baseURL string) string {
 	cfg.BlobStores.File = []config.FileBlobStore{
 		{Name: "default", Path: "/nexus-data/blobs/default"},
 	}
-	cfg.GuestAccess.BrowseRead.IncludeRepositories = []string{"raw-hosted"}
-	cfg.GuestAccess.BrowseRead.ExcludeRepositories = nil
-	cfg.GuestAccess.Deny.Repositories = nil
+	cfg.GuestAccess.Public.Repositories = []string{"raw-hosted"}
+	cfg.GuestAccess.Protected.Repositories = nil
 	t.Setenv("NEXUS_AI_DRY_RUN_PASSWORD", "secret")
 	data, err := config.Marshal(cfg)
 	if err != nil {
